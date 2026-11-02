@@ -145,6 +145,12 @@ namespace Controle_De_estoqueAPI.Service.Implementações
             {
                 throw new KeyNotFoundException($"Produto com ID {id} não encontrado.");
             }
+            var produtoAtuaizado = await _context.Produtos
+                .FirstOrDefaultAsync(p => p.NomeProduto == dto.NomeProduto && p.Id != id);
+            if (produtoAtuaizado != null)
+            {
+                throw new InvalidOperationException($"Já existe um produto com o nome '{dto.NomeProduto}'.");
+            }
             produtoExistente.NomeProduto = dto.NomeProduto;
             produtoExistente.DescricaoProduto = dto.DescricaoProduto;
             produtoExistente.CategoriaId = dto.CategoriaId;
@@ -153,6 +159,7 @@ namespace Controle_De_estoqueAPI.Service.Implementações
             produtoExistente.Ativo = dto.Ativo;
             produtoExistente.UltimaAtualizacao = DateTime.UtcNow;
             await _context.SaveChangesAsync();
+
             return new ProdutoRespostaDto
             {
                 Id = produtoExistente.Id,

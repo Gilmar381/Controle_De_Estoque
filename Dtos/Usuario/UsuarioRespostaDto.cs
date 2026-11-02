@@ -7,5 +7,6 @@
         public string Email { get; set; }
         public string Login { get; set; }
         public int PerfilId { get; set; }
+        public bool Ativo { get; set; }
     }
 }

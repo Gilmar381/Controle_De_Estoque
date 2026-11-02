@@ -9,17 +9,14 @@ namespace Controle_De_estoqueAPI.Dtos.Produto
         public  string? NomeProduto { get; set; }
 
         [MaxLength(200)]
-        public  string? NomeDescricao { get; set; }
+        public  string? DescricaoProduto { get; set; }
 
-        [MaxLength(100)]
         public int CategoriaId { get; set; } // Mantive o "i" extra igual ao seu original
 
-        [MaxLength(200)]
         public int FornecedorId { get; set; }
 
         // O tipo 'decimal?' permite que o preço venha nulo caso não seja alterado
         public  decimal? PrecoProduto { get; set; }
-        public string DescricaoProduto { get; internal set; }
-        public bool Ativo { get; internal set; }
+        public bool Ativo { get; set; }
     }
 }

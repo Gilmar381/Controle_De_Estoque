@@ -13,12 +13,5 @@ namespace Controle_De_estoqueAPI.Dtos.Venda
         [Required]
         public int Quantidade { get; set; }
 
-        [Required]
-        [Column(TypeName = "decimal(18,2)")]
-        public decimal PrecoUnitario { get; set; }
-
-
-
-
     }
 }

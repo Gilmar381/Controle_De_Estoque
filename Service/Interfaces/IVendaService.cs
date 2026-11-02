@@ -5,7 +5,7 @@ namespace Controle_De_estoqueAPI.Service.Interfaces
 {
     public interface IVendaService
     {
-        Task<VendaRespostaDto> CriarAsync(CriarVendaDto dto);
+        Task<VendaRespostaDto> CriarAsync(CriarVendaDto dto, int produtoId);
         Task<VendaRespostaDto> ObterPorIdAsync(int id);
         Task<IEnumerable<VendaRespostaDto>> ListarAsync();
         

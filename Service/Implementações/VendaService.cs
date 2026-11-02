@@ -16,68 +16,99 @@ namespace Controle_De_estoqueAPI.Service.Implementações
         {
             _context = context;
             _movimentacaoService = movimentacao;
+            
         }
 
-        public async Task<VendaRespostaDto> CriarAsync(CriarVendaDto dto)// Parei exatamente aqui, mas posso continuar a implementação do método CriarAsync para você. Aqui está a continuação do código:
+        public async Task<VendaRespostaDto> CriarAsync(CriarVendaDto dto, int usuarioId)
         {
-            var produtosIds = dto.ItensVenda.Select(iv => iv.ProdutoId).ToList();
-            var produto = await _context.Produtos
-                    .Where(p => produtosIds.Contains(p.Id))
-                    .ToListAsync();
-            if (produto.Count != dto.ItensVenda.Count)
-            {
+            if (dto.ItensVenda == null || !dto.ItensVenda.Any())
+                throw new Exception("A venda deve conter pelo menos um item.");
+
+            // Agrupa itens repetidos do mesmo produto
+            var itensAgrupados = dto.ItensVenda
+                .GroupBy(i => i.ProdutoId)
+                .Select(g => new { ProdutoId = g.Key, Quantidade = g.Sum(x => x.Quantidade) })
+                .ToList();
+
+            var produtosIds = itensAgrupados.Select(i => i.ProdutoId).ToList();
+
+            var produtos = await _context.Produtos
+                .Where(p => produtosIds.Contains(p.Id))
+                .ToDictionaryAsync(p => p.Id);
+
+            if (produtos.Count != produtosIds.Count)
                 throw new Exception("Um ou mais produtos não existem.");
+
+            foreach (var item in itensAgrupados)
+            {
+                var produto = produtos[item.ProdutoId];
+
+                if (item.Quantidade <= 0)
+                    throw new Exception("A quantidade deve ser maior que zero.");
+
+                if (!produto.Ativo)
+                    throw new Exception($"O produto '{produto.NomeProduto}' está inativo.");
+
+                if (produto.QuantidadeEstoque < item.Quantidade)
+                    throw new Exception($"Estoque insuficiente para '{produto.NomeProduto}'.");
             }
-            var venda = new Venda
+
+            await using var transaction = await _context.Database.BeginTransactionAsync();
+
+            try
             {
-                DataVenda = DateTime.Now,
-                UsuarioId = dto.UsuarioId,
-               
-                TotalVenda = 0, // Inicialmente zero, será calculado depois
-                FormaPagamento = dto.FormaPagamento,
-                
-               ItensVenda = dto.ItensVenda
-               .Select(i => new ItemVenda
+                var venda = new Venda
                 {
-                    ProdutoId = i.ProdutoId,
-                    Quantidade = i.Quantidade,
-                    PrecoUnitario = produto.First(p => p. Id == i.ProdutoId).PrecoProduto
-                }).ToList()
-            };
-            // Calcula o total da venda
-            venda.TotalVenda = venda.ItensVenda.Sum(i => i.Quantidade * i.PrecoUnitario);
-            _context.Vendas.Add(venda);
-            await _context.SaveChangesAsync();
+                    DataVenda = DateTime.UtcNow,
+                    UsuarioId = dto.UsuarioId,
+                    FormaPagamento = dto.FormaPagamento,
+                    ItensVenda = itensAgrupados.Select(i => new ItemVenda
+                    {
+                        ProdutoId = i.ProdutoId,
+                        Quantidade = i.Quantidade,
+                        PrecoUnitario = produtos[i.ProdutoId].PrecoProduto
+                    }).ToList()
+                };
 
-            var saidaDto = new RegistrarSaidaDto
+                venda.TotalVenda = venda.ItensVenda.Sum(i => i.Quantidade * i.PrecoUnitario);
+
+                _context.Vendas.Add(venda);
+                await _context.SaveChangesAsync();
+
+                var saidaDto = new RegistrarSaidaDto
+                {
+                    VendaId = venda.Id,
+                    Itens = venda.ItensVenda.Select(i => new ItemSaidaDto
+                    {
+                        ProdutoId = i.ProdutoId,
+                        Quantidade = i.Quantidade
+                    }).ToList()
+                };
+
+                await _movimentacaoService.RegistrarSaidaAsync(saidaDto, dto.UsuarioId);
+
+                await transaction.CommitAsync();
+
+                return new VendaRespostaDto
+                {
+                    Id = venda.Id,
+                    DataVenda = venda.DataVenda,
+                    UsuarioId = venda.UsuarioId,
+                    TotalVenda = venda.TotalVenda,
+                    FormaPagamento = venda.FormaPagamento,
+                    ItensVenda = venda.ItensVenda.Select(i => new ItemVendaDto
+                    {
+                        ProdutoId = i.ProdutoId,
+                        Quantidade = i.Quantidade
+                    }).ToList()
+                };
+            }
+            catch
             {
-                VendaId = venda.Id,
-                Itens = venda.ItensVenda.Select(i => new ItemSaidaDto
-                {
-                    ProdutoId = i.ProdutoId,
-                    Quantidade = i.Quantidade
-                }).ToList()
-            };
-
-            await _movimentacaoService.RegistrarSaidaAsync(saidaDto);
-
-            return new VendaRespostaDto
-            {
-                Id = venda.Id,
-                DataVenda = venda.DataVenda,
-                UsuarioId = venda.UsuarioId,
-                TotalVenda = venda.TotalVenda,
-                FormaPagamento = venda.FormaPagamento,
-                ItensVenda = venda.ItensVenda.Select(i => new ItemVendaDto
-                {
-                    ProdutoId = i.ProdutoId,
-                    Quantidade = i.Quantidade,
-                    PrecoUnitario = i.PrecoUnitario
-                }).ToList()
-
-            };
+                await transaction.RollbackAsync();
+                throw;
+            }
         }
-
         public async Task<VendaRespostaDto> ObterPorIdAsync(int id)
         {
             var venda = await _context.Vendas
@@ -97,8 +128,7 @@ namespace Controle_De_estoqueAPI.Service.Implementações
                 ItensVenda = venda.ItensVenda.Select(i => new ItemVendaDto
                 {
                     ProdutoId = i.ProdutoId,
-                    Quantidade = i.Quantidade,
-                    PrecoUnitario = i.PrecoUnitario
+                    Quantidade = i.Quantidade
                 }).ToList()
             };
         }
@@ -118,8 +148,7 @@ namespace Controle_De_estoqueAPI.Service.Implementações
                 ItensVenda = v.ItensVenda.Select(i => new ItemVendaDto
                 {
                     ProdutoId = i.ProdutoId,
-                    Quantidade = i.Quantidade,
-                    PrecoUnitario = i.PrecoUnitario
+                    Quantidade = i.Quantidade
                 }).ToList()
             });
         }

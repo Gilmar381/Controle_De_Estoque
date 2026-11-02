@@ -3,6 +3,7 @@ using Controle_De_estoqueAPI.Models;
 using Controle_De_estoqueAPI.Service.Interfaces;
 using Controle_De_estoqueAPI.Dtos.MovimentacaoEstoque;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Identity.Client;
 
 
 
@@ -14,7 +15,6 @@ namespace Controle_De_estoqueAPI.Service.Implementações
         private readonly ControleEstoqueDbContexto _context;
         private readonly IProdutoService _produtoService;
         private readonly IUsuarioService _usuarioService;
-        private readonly IVendaService _vendaService;
 
 
         public MovimentacaoEstoqueService(ControleEstoqueDbContexto context,
@@ -42,16 +42,20 @@ namespace Controle_De_estoqueAPI.Service.Implementações
                 throw new Exception("Usuário não encontrado.");
             }
 
-            produto.QuantidadeEstoque += dto.Quantidade;
+           
             var movimentacao = new MovimentacaoEstoque
             {
                 ProdutoId = dto.ProdutoId,
                 UsuarioId = usuario.Id,
                 Quantidade = dto.Quantidade,
-                TipoMovimentacao = dto.TipoMovimentacao,
+                TipoMovimentacao = TipoMovimentacao.Entrada,
                 DataMovimentacao = DateTime.Now,
                 Observacao = dto.Observacao
+                
             };
+
+            AtualizarEstoqueAsync(produto.Id, produto.QuantidadeEstoque + dto.Quantidade).Wait();
+
 
             _context.MovimentacaoEstoques.Add(movimentacao);
             await _context.SaveChangesAsync();
@@ -71,7 +75,7 @@ namespace Controle_De_estoqueAPI.Service.Implementações
 
         }
 
-        public async Task<List<MovimentacaoSaidaItemRespostaDto>> RegistrarSaidaAsync(RegistrarSaidaDto dto)
+        public async Task<List<MovimentacaoSaidaItemRespostaDto>> RegistrarSaidaAsync(RegistrarSaidaDto dto, int usuarioId)
         {
             var movimentacoesCriadas = new List<(MovimentacaoEstoque Movimentacao, string ProdutoNome)>();
 
@@ -85,11 +89,12 @@ namespace Controle_De_estoqueAPI.Service.Implementações
                 if (produto.QuantidadeEstoque < item.Quantidade)
                     throw new InvalidOperationException($"Estoque insuficiente para o produto {produto.NomeProduto}.");
 
-                produto.QuantidadeEstoque -= item.Quantidade;
+                await AtualizarEstoqueAsync(produto.Id, produto.QuantidadeEstoque - item.Quantidade);
 
                 var movimentacao = new MovimentacaoEstoque
                 {
                     ProdutoId = item.ProdutoId,
+                    UsuarioId =usuarioId,
                     Quantidade = item.Quantidade,
                     TipoMovimentacao = TipoMovimentacao.Saida,
                     DataMovimentacao = DateTime.Now,
@@ -151,6 +156,8 @@ namespace Controle_De_estoqueAPI.Service.Implementações
 
             return movimentacao.Select(m => new MovimentacaoRespostaDto
             {
+                UsuarioNome = _context.Usuarios.Where(u => u.Id == m.UsuarioId).Select(u => u.NomeUsuario).FirstOrDefault() ?? "Usuário não encontrado",
+                ProdutoNome = _context.Produtos.Where(p => p.Id == m.ProdutoId).Select(p => p.NomeProduto).FirstOrDefault() ?? "Produto não encontrado",
                 Id = m.Id,
                 ProdutoId = m.ProdutoId,
                 Quantidade = m.Quantidade,
@@ -169,6 +176,8 @@ namespace Controle_De_estoqueAPI.Service.Implementações
                 .ToListAsync();
             return movimentacao.Select(m => new MovimentacaoRespostaDto
             {
+                UsuarioNome = _context.Usuarios.Where(u => u.Id == m.UsuarioId).Select(u => u.NomeUsuario).FirstOrDefault() ?? "Usuário não encontrado",
+                ProdutoNome = _context.Produtos.Where(p => p.Id == m.ProdutoId).Select(p => p.NomeProduto).FirstOrDefault() ?? "Produto não encontrado",
                 Id = m.Id,
                 ProdutoId = m.ProdutoId,
                 Quantidade = m.Quantidade,
@@ -179,6 +188,19 @@ namespace Controle_De_estoqueAPI.Service.Implementações
             });
 
         }
-        
+        public async Task AtualizarEstoqueAsync(int produtoId, int quantidade)
+        {
+            var produto = await _context.Produtos.FindAsync(produtoId);
+            if (produto == null)
+            {
+                throw new KeyNotFoundException($"Produto com ID {produtoId} não encontrado.");
+            }
+            produto.QuantidadeEstoque = quantidade;
+            produto.UltimaAtualizacao = DateTime.UtcNow;
+            _context.Produtos.Update(produto);
+            await _context.SaveChangesAsync();
+        }
+
+
     }
 }

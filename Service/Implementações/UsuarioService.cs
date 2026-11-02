@@ -53,7 +53,8 @@ namespace Controle_De_estoqueAPI.Service.Implementações
                 EmailUsuario = dto.Email,
                 Login = dto.Login,
                 SenhaHash = _gerarHash.GerarHash(dto.Senha), // Hash da senha com fator de trabalho 12
-                PerfilId = dto.PerfilId,               
+                PerfilId = dto.PerfilId,
+                Ativo = dto.Ativo,
             };
 
             _context.Usuarios.Add(usuario);
@@ -65,7 +66,7 @@ namespace Controle_De_estoqueAPI.Service.Implementações
                 Email = usuario.EmailUsuario,
                 Login = dto.Login,
                 PerfilId = dto.PerfilId,
-                
+                Ativo = usuario.Ativo
             };
         }
 
@@ -96,6 +97,7 @@ namespace Controle_De_estoqueAPI.Service.Implementações
             usuario.NomeUsuario = dto.Nome;
             usuario.EmailUsuario = dto.Email;
             usuario.PerfilId = dto.PerfilId;
+            usuario.Ativo = dto.Ativo;
 
 
             await _context.SaveChangesAsync();
@@ -105,6 +107,7 @@ namespace Controle_De_estoqueAPI.Service.Implementações
                 Email = usuario.EmailUsuario,
                 PerfilId = usuario.PerfilId,
                 Login = usuario.Login,
+                Ativo = usuario.Ativo
             };
         }
 

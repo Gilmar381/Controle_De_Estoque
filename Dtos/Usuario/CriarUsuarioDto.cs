@@ -22,7 +22,9 @@ namespace Controle_De_estoqueAPI.Dtos.Usuario
         [MaxLength(100)]
         public string Login { get; set; }
         public int PerfilId { get; set; }
-        
+
+        public bool Ativo { get; set; } = true;
+
 
 
     }

@@ -30,7 +30,7 @@ namespace Controle_De_estoqueAPI.Models
         [ForeignKey("PerfilId")]
         public Perfil Perfil { get; set; }
         [Required]
-        public bool Ativo { get; set; } 
+        public bool Ativo { get; set; } = true;
         [Required]
         public DateTime DataCriacao { get; set; }
         public DateTime UltimoLogin { get; set; }

@@ -4,6 +4,7 @@ using Controle_De_estoqueAPI.Models;
 using Controle_De_estoqueAPI.Service.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 
 namespace Controle_De_estoqueAPI.Controllers
@@ -30,16 +31,17 @@ namespace Controle_De_estoqueAPI.Controllers
 
         [HttpGet("{Id}")]
         [Authorize(Roles = PerfilConst.Gerente)]
-        public async Task<IActionResult> BuscarPorId(int id)
+        public async Task<IActionResult> BuscarPorId(int Id)
         {
-            var resultado = await _vendaService.ObterPorIdAsync(id);
+            var resultado = await _vendaService.ObterPorIdAsync(Id);
             return Ok(resultado);
         }
 
         [HttpPost]
         public async Task<IActionResult> Criar([FromBody] CriarVendaDto dto)
         {
-            var resultado = await _vendaService.CriarAsync(dto);
+            var usuarioId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var resultado = await _vendaService.CriarAsync(dto, usuarioId);
             return Ok(resultado);
         }
 

@@ -28,9 +28,9 @@ namespace Controle_De_estoqueAPI.Controllers
         }
 
         [HttpGet("{Id}")]
-        public async Task<IActionResult> BuscarPorId(int id)
+        public async Task<IActionResult> BuscarPorId(int Id)
         {
-            var resultado = await _categoriaService.ObterPorIdAsync(id);
+            var resultado = await _categoriaService.ObterPorIdAsync(Id);
             return Ok(resultado);
         }
 
@@ -42,19 +42,19 @@ namespace Controle_De_estoqueAPI.Controllers
         }
 
         [HttpPut("{Id}")]
-        public async Task<IActionResult> Atualizar(int id, [FromBody] AtualizarCategoriaDto dto)
+        public async Task<IActionResult> Atualizar(int Id, [FromBody] AtualizarCategoriaDto dto)
         {
-            var resultado = await _categoriaService.AtualizarAsync(id, dto);
+            var resultado = await _categoriaService.AtualizarAsync(Id, dto);
             return Ok(resultado);
         }
 
 
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> Excluir(int id)
+        [HttpDelete("{Id}")]
+        public async Task<IActionResult> Excluir(int Id)
         {
             try
             {
-                await _categoriaService.ExcluirAsync(id);
+                await _categoriaService.ExcluirAsync(Id);
                 return NoContent(); // 204 - sucesso, sem corpo de resposta
             }
             catch (KeyNotFoundException ex)

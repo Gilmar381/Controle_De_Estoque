@@ -18,8 +18,7 @@ namespace Controle_De_estoqueAPI.Dtos.MovimentacaoEstoque
         [Range(1, int.MaxValue, ErrorMessage = "A quantidade deve ser maior que zero.")]
         public int Quantidade { get; set; }
 
-        [Required]
-        public TipoMovimentacao TipoMovimentacao { get; set; }
+ 
 
         [Required]
         [MaxLength(500)]

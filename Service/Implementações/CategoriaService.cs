@@ -2,7 +2,6 @@
 using Controle_De_estoqueAPI.Data;
 using Microsoft.EntityFrameworkCore;
 using Controle_De_estoqueAPI.Service.Interfaces;
-using Controle_De_estoqueAPI.Dtos.Categoria;
 using System.Collections.ObjectModel;
 using Controle_De_estoqueAPI.Models;
 

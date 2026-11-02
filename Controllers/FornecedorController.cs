@@ -13,7 +13,7 @@ namespace Controle_De_estoqueAPI.Controllers
     {
         private readonly IFornecedorService _fornecedorService;
 
-        FornecedorController(IFornecedorService fornecedorService) 
+       public FornecedorController(IFornecedorService fornecedorService) 
         {   
             _fornecedorService = fornecedorService;
         }
@@ -27,9 +27,9 @@ namespace Controle_De_estoqueAPI.Controllers
 
         [HttpGet("{Id}")]
 
-         public async Task<IActionResult> BuscarPorId(int id)
+         public async Task<IActionResult> BuscarPorId(int Id)
         {
-            var resultado = await _fornecedorService.ObterPorIdAsync(id);
+            var resultado = await _fornecedorService.ObterPorIdAsync(Id);
             return Ok(resultado);
         }
 
@@ -41,18 +41,18 @@ namespace Controle_De_estoqueAPI.Controllers
         }
 
         [HttpPut("{Id}")]
-        public async Task<IActionResult> Atualizar(int id, [FromBody] AtualizarFornecedorDto dto)
+        public async Task<IActionResult> Atualizar(int Id, [FromBody] AtualizarFornecedorDto dto)
         {
-            var resultado = await _fornecedorService.AtualizarAsync(id, dto);
+            var resultado = await _fornecedorService.AtualizarAsync(Id, dto);
             return Ok(resultado);
         }
 
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> Excluir(int id)
+        [HttpDelete("{Id}")]
+        public async Task<IActionResult> Excluir(int Id)
         {
             try
             {
-                await _fornecedorService.ExcluirAsync(id);
+                await _fornecedorService.ExcluirAsync(Id);
                 return NoContent(); // 204 - sucesso, sem corpo de resposta
             }
             catch (KeyNotFoundException ex)

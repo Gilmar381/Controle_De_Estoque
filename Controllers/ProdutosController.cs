@@ -42,16 +42,16 @@ namespace Controle_De_estoqueAPI.Controllers
         }
 
         [HttpPut("{Id}")]
-        public async Task<IActionResult> Atualizar(int id, AtualizarProdutoDto dto)
+        public async Task<IActionResult> Atualizar(int Id, AtualizarProdutoDto dto)
         {
-            var resultado = await _produtoService.AtualizarAsync(id, dto);
+            var resultado = await _produtoService.AtualizarAsync(Id, dto);
             return Ok(resultado);
         }
 
         [HttpDelete("{Id}")]
-        public async Task<IActionResult> Excluir(int id)
+        public async Task<IActionResult> Excluir(int Id)
         {
-            var resultado = await _produtoService.ExcluirAsync(id);
+            var resultado = await _produtoService.ExcluirAsync(Id);
             return Ok(resultado);
         }
     }

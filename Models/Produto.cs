@@ -14,13 +14,11 @@ namespace Controle_De_estoqueAPI.Models
         [MaxLength(200)]
         public string DescricaoProduto { get; set; }
 
-        [Required]
         public int CategoriaId { get; set; }
 
         [ForeignKey("CategoriaId")]
         public Categoria Categoria { get; set; }
 
-        [Required]
         public int FornecedorId { get; set; }
 
         [ForeignKey("FornecedorId")]
@@ -28,21 +26,16 @@ namespace Controle_De_estoqueAPI.Models
 
         [Required]
         [Column(TypeName = "decimal(18,2)")]
+        [Range(0.01, double.MaxValue, ErrorMessage = "O preço do produto deve ser maior que zero.")]
         public decimal PrecoProduto { get; set; }
 
-        public void DefinirPreco(decimal preco)
-        {
-            if (preco <= 0)
-                throw new ArgumentException("O preço deve ser maior que zero.");
-            PrecoProduto = preco;
-        }
-        [Required]
+        
         public int QuantidadeEstoque { get; set; }
-        [Required]
-        public bool Ativo { get; set; }
-        [Required]
+        public bool Ativo { get; set; }= true;
+
         [DataType(DataType.DateTime)]
-        public DateTime DataCadastro { get; set; }
+        public DateTime DataCadastro { get; set; } = DateTime.UtcNow;
+
         [DataType(DataType.DateTime)]
         public DateTime UltimaAtualizacao { get; set; }
         
