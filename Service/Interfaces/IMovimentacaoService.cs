@@ -1,17 +1,15 @@
-﻿using Controle_De_estoqueAPI.Dtos.MovimentacaoEstoque;
-using Controle_De_estoqueAPI.Models;
+﻿using Controle_De_estoqueAPI.Dtos.Comum;
+using Controle_De_estoqueAPI.Dtos.MovimentacaoEstoque;
 
 namespace Controle_De_estoqueAPI.Service.Interfaces
 {
     public interface IMovimentacaoService
     {
-        Task<MovimentacaoRespostaDto>RegistrarEntradaAsync( CriarMovimentacaoDto dto);
-        Task<List<MovimentacaoSaidaItemRespostaDto>> RegistrarSaidaAsync(RegistrarSaidaDto dto, int produtoId);
-        Task<IEnumerable<ListarTodosDto>>ListarAsync();    
-        Task<ListarTodosDto>ObterPorIdAsync(int id);
-        Task<IEnumerable<MovimentacaoRespostaDto>>ListarPorProdutoAsync(int produtoId);
-        Task<IEnumerable<MovimentacaoRespostaDto>>ListarPorPeriodoAsync(DateTime dataInicio, DateTime dataFim);
-        Task AtualizarEstoqueAsync(int produtoId, int quantidade);
-
+        Task<MovimentacaoRespostaDto> RegistrarEntradaAsync(CriarMovimentacaoDto dto, int usuarioId);
+        Task<List<MovimentacaoSaidaItemRespostaDto>> RegistrarSaidaAsync(RegistrarSaidaDto dto, int usuarioId);
+        Task<PaginadoDto<ListarTodosDto>> ListarAsync(PaginacaoParametros paginacao);
+        Task<MovimentacaoRespostaDto> ObterPorIdAsync(int id);
+        Task<PaginadoDto<MovimentacaoRespostaDto>> ListarPorProdutoAsync(int produtoId, PaginacaoParametros paginacao);
+        Task<PaginadoDto<MovimentacaoRespostaDto>> ListarPorPeriodoAsync(DateTime dataInicio, DateTime dataFim, PaginacaoParametros paginacao);
     }
 }

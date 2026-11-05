@@ -1,6 +1,6 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using Controle_De_estoqueAPI.Constantes;
 using Controle_De_estoqueAPI.Models;
-using Controle_De_estoqueAPI.Constantes;
+using Microsoft.EntityFrameworkCore;
 
 namespace Controle_De_estoqueAPI.Data
 {
@@ -9,6 +9,7 @@ namespace Controle_De_estoqueAPI.Data
         public ControleEstoqueDbContexto(DbContextOptions<ControleEstoqueDbContexto> options) : base(options)
         {
         }
+
         public DbSet<Produto> Produtos { get; set; }
         public DbSet<Usuario> Usuarios { get; set; }
         public DbSet<Venda> Vendas { get; set; }
@@ -27,6 +28,22 @@ namespace Controle_De_estoqueAPI.Data
                 new Perfil { Id = 2, PerfilNome = PerfilConst.Estoquista },
                 new Perfil { Id = 3, PerfilNome = PerfilConst.Gerente }
             );
+
+            // Consultas por período
+            modelBuilder.Entity<MovimentacaoEstoque>()
+                .HasIndex(m => m.DataMovimentacao);
+
+            // Nenhuma exclusão em cascata, exceto os itens de uma venda (que pertencem a ela).
+            // Assim, apagar um produto/usuário nunca leva junto vendas e histórico de estoque.
+            foreach (var fk in modelBuilder.Model.GetEntityTypes()
+                         .SelectMany(e => e.GetForeignKeys())
+                         .ToList())
+            {
+                var ehItemDaVenda = fk.DeclaringEntityType.ClrType == typeof(ItemVenda)
+                                    && fk.PrincipalEntityType.ClrType == typeof(Venda);
+
+                fk.DeleteBehavior = ehItemDaVenda ? DeleteBehavior.Cascade : DeleteBehavior.Restrict;
+            }
         }
     }
 }

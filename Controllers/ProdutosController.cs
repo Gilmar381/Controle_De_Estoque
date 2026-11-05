@@ -3,6 +3,7 @@ using Controle_De_estoqueAPI.Service.Interfaces;
 using Controle_De_estoqueAPI.Dtos.Produto;
 using Microsoft.AspNetCore.Authorization;
 using Controle_De_estoqueAPI.Constantes;
+using Controle_De_estoqueAPI.Dtos.Comum;
 
 namespace Controle_De_estoqueAPI.Controllers
 {
@@ -21,9 +22,9 @@ namespace Controle_De_estoqueAPI.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> BuscarTodos()
+        public async Task<IActionResult> BuscarTodos([FromQuery] PaginacaoParametros paginacao)
         {
-            var resultado = await _produtoService.ListarAsync();
+            var resultado = await _produtoService.ListarAsync(paginacao );
             return Ok(resultado);
         }
 

@@ -2,17 +2,19 @@
 
 namespace Controle_De_estoqueAPI.Dtos.Usuario
 {
-    public class AtualizarUsuarioDto 
+    /// <summary>Atualização parcial: só os campos enviados (não nulos) são alterados.</summary>
+    public class AtualizarUsuarioDto
     {
-       
         [MaxLength(100)]
-        public  string? Nome { get; set; }
+        public string? Nome { get; set; }
 
-        
         [EmailAddress]
-        public  string? Email { get; set; }
+        [MaxLength(256)]
+        public string? Email { get; set; }
 
-        public int PerfilId { get; set; }
-        public bool Ativo { get; set; }
+        [Range(1, int.MaxValue)]
+        public int? PerfilId { get; set; }
+
+        public bool? Ativo { get; set; }
     }
 }

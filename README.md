@@ -1,365 +1,274 @@
 # 📦 Controle de Estoque API
 
-API REST para controle de estoque e vendas de pequenos comércios, desenvolvida em **ASP.NET Core** com **Entity Framework Core** e **SQL Server**. Conta com autenticação via **JWT** e controle de acesso por perfil (Caixa, Estoquista e Gerente).
+API REST para controle de estoque e vendas de uma loja, desenvolvida em **ASP.NET Core** com **Entity Framework Core** e **SQL Server**. Conta com autenticação via **JWT** e controle de acesso por perfil (Caixa, Estoquista e Gerente).
+
+## 📑 Sumário
+
+- [Funcionalidades](#-funcionalidades)
+- [Tecnologias](#-tecnologias)
+- [Arquitetura](#-arquitetura)
+- [Modelo de dados](#-modelo-de-dados)
+- [Perfis e permissões](#-perfis-e-permissões)
+- [Regras de negócio](#-regras-de-negócio)
+- [Endpoints](#-endpoints)
+- [Como executar](#-como-executar)
+- [Configuração](#-configuração)
+- [Melhorias planejadas](#-melhorias-planejadas)
 
 ## ✨ Funcionalidades
 
-- Autenticação com JWT (token válido por 2 horas) e senhas protegidas com **BCrypt**
-- Controle de acesso por perfil (`Caixa`, `Estoquista`, `Gerente`)
-- CRUD de **Produtos**, **Categorias**, **Fornecedores** e **Usuários**
-- **Movimentações de estoque** (entrada, saída e ajuste) com consulta por produto e por período
-- **Vendas** com cálculo automático do total usando o preço oficial do produto e baixa de estoque
-- Validação de **CNPJ** (com dígitos verificadores) e **telefone** brasileiro (com DDD)
-- Exclusão lógica de usuários (o usuário é marcado como inativo)
-- Migrations aplicadas automaticamente na inicialização
-- Criação automática de um **Gerente inicial** em banco vazio
-- Documentação interativa com **Swagger** (ambiente de desenvolvimento)
+- Autenticação com JWT (token válido por 2 horas) e alteração de senha
+- Cadastro de usuários com perfis de acesso
+- CRUD de categorias, fornecedores e produtos
+- Registro de movimentações de estoque (entrada e saída) com histórico
+- Consulta de movimentações por produto e por período
+- Registro de vendas com cálculo automático do total e baixa de estoque
+- Criação automática do banco (migrations) e de um usuário Gerente inicial
+- Documentação interativa com Swagger (ambiente de desenvolvimento)
 
-## 🛠️ Tecnologias
+## 🛠 Tecnologias
 
-- .NET 9 / ASP.NET Core Web API
-- Entity Framework Core (SQL Server)
-- JWT Bearer Authentication
+- C# / ASP.NET Core Web API
+- Entity Framework Core 9 (Code First + Migrations)
+- SQL Server
+- Autenticação JWT Bearer
 - BCrypt.Net (hash de senhas)
 - Swagger / Swashbuckle
 
-## 🏗️ Arquitetura
+> A versão exata do .NET SDK e dos pacotes está definida no arquivo `Controle_De_estoqueAPI.csproj`.
 
-O projeto segue uma arquitetura em camadas simples: **Controllers → Services → DbContext**, com injeção de dependência (serviços registrados como `Scoped`) e DTOs separados para entrada e saída.
+## 🏗 Arquitetura
+
+O projeto segue uma organização em camadas simples:
 
 ```
 Controle_De_estoqueAPI/
-├── Constantes/          # PerfilConst (nomes dos perfis)
-├── Controllers/         # Endpoints da API
-├── Data/                # DbContext e DesignTimeFactory
-├── Dtos/                # Objetos de entrada e resposta, por módulo
-│   ├── Categoria/
-│   ├── Fornecedor/
-│   ├── MovimentacaoEstoque/
-│   ├── Perfil/
-│   ├── Produto/
-│   ├── Usuario/
-│   └── Venda/
-├── Migrations/          # Migrations do EF Core
-├── Models/              # Entidades do banco
+├── Constantes/        # PerfilConst (nomes dos perfis)
+├── Controllers/       # Endpoints HTTP
+├── Data/              # DbContext e Factory de design-time
+├── Dtos/              # Objetos de entrada/saída, agrupados por entidade
+├── Migrations/        # Migrations do EF Core
+├── Models/            # Entidades do domínio
 ├── Service/
-│   ├── Interfaces/      # Contratos dos serviços
-│   └── Implementações/  # Regras de negócio
-├── Validations/         # Atributos CnpjValido e TelefoneValido
-├── appsettings.json
-└── Program.cs
+│   ├── Interfaces/    # Contratos dos serviços
+│   └── Implementações/# Regras de negócio
+├── Validations/       # Validadores customizados (CNPJ e telefone)
+├── Program.cs         # Configuração, DI, JWT, Swagger e seed
+└── appsettings.json
 ```
 
-## 🗃️ Modelo de dados
+Os controllers apenas recebem a requisição e delegam para os **services**, que concentram as regras de negócio e acessam o banco via `ControleEstoqueDbContexto`.
+
+## 🗄 Modelo de dados
 
 | Entidade | Descrição |
 |---|---|
-| `Perfil` | Perfis de acesso (Caixa, Estoquista, Gerente), populados via seed |
-| `Usuario` | Usuários do sistema (login e e-mail únicos) |
+| `Usuario` | Login e e-mail únicos, senha em hash BCrypt, perfil, status ativo, datas de criação e último login |
+| `Perfil` | Perfis de acesso (seed: Caixa, Estoquista, Gerente) |
 | `Categoria` | Categorias de produtos |
-| `Fornecedor` | Fornecedores (CNPJ, telefone, e-mail, endereço) |
-| `Produto` | Produtos com preço, estoque, categoria e fornecedor |
-| `MovimentacaoEstoque` | Histórico de entradas, saídas e ajustes |
-| `Venda` | Cabeçalho da venda (usuário, data, total, forma de pagamento) |
-| `ItemVenda` | Itens de cada venda |
+| `Fornecedor` | Nome, CNPJ, telefone, e-mail e endereço |
+| `Produto` | Nome, descrição, preço, quantidade em estoque, status ativo, categoria e fornecedor |
+| `MovimentacaoEstoque` | Entrada, saída ou ajuste de estoque, com usuário responsável e observação |
+| `Venda` | Data, usuário, forma de pagamento e total |
+| `ItemVenda` | Produto, quantidade, preço unitário e subtotal de cada item da venda |
 
-**Relacionamentos principais:** `Perfil 1:N Usuario`, `Categoria 1:N Produto`, `Fornecedor 1:N Produto`, `Usuario 1:N Venda`, `Venda 1:N ItemVenda`, `Produto 1:N MovimentacaoEstoque`.
+**Formas de pagamento:** Dinheiro, CartaoCredito, CartaoDebito, Pix, ValeAlimentacao, Outros.
 
-### Enums
+**Tipos de movimentação:** Entrada, Saída, Ajuste.
 
-| `TipoMovimentacao` | Valor |
-|---|---|
-| Entrada | 1 |
-| Saida | 2 |
-| Ajuste | 3 |
+## 🔐 Perfis e permissões
 
-| `FormaPagamento` | Valor |
-|---|---|
-| Dinheiro | 1 |
-| CartaoCredito | 2 |
-| CartaoDebito | 3 |
-| Pix | 4 |
-| ValeAlimentacao | 5 |
-| Outros | 6 |
+| Recurso | Caixa | Estoquista | Gerente |
+|---|:---:|:---:|:---:|
+| Login / alterar senha | ✅ | ✅ | ✅ |
+| Categorias | ❌ | ✅ | ✅ |
+| Produtos | ❌ | ✅ | ✅ |
+| Movimentações de estoque | ❌ | ✅ | ✅ |
+| Fornecedores | ❌ | ❌ | ✅ |
+| Usuários e perfis | ❌ | ❌ | ✅ |
+| Registrar venda | ✅ | ❌ | ✅ |
+| Consultar vendas | ❌ | ❌ | ✅ |
+
+## 📋 Regras de negócio
+
+- **Login:** só é permitido para usuários ativos. Credenciais inválidas retornam `401`. A data do último login é atualizada a cada acesso.
+- **Token JWT:** carrega o ID, o nome e o perfil do usuário, com validade de 2 horas.
+- **Usuários:** e-mail e login são únicos. A exclusão é **lógica** (o usuário é apenas marcado como inativo). Senhas têm de 8 a 72 caracteres.
+- **Sessão:** a cada requisição o token é revalidado no banco; usuário desativado ou com perfil alterado perde o acesso imediatamente.
+- **Login:** limitado a 5 tentativas por minuto por IP.
+- **Fornecedores:** não é possível cadastrar dois fornecedores com o mesmo CNPJ. O CNPJ é validado pelos dígitos verificadores e o telefone deve ter DDD válido (10 ou 11 dígitos).
+- **Categorias e fornecedores:** não podem ser excluídos se houver produtos associados.
+- **Produtos:** nascem ativos e com estoque zerado; o nome deve ser único. O estoque só é alterado por movimentações. A exclusão é **lógica** (desativa o produto), preservando vendas e histórico.
+- **Entrada de estoque:** soma a quantidade ao estoque do produto e registra a movimentação.
+- **Saída de estoque:** valida se há estoque suficiente, subtrai a quantidade e registra a movimentação. Não é possível baixar duas vezes o estoque de uma mesma venda; saídas avulsas exigem observação.
+- **Concorrência:** o produto usa `RowVersion`; operações simultâneas sobre o mesmo estoque resultam em `409` para a segunda.
+- **Vendas:**
+  - Deve conter ao menos um item; itens repetidos do mesmo produto são agrupados.
+  - Produtos inexistentes, inativos ou sem estoque suficiente impedem a venda.
+  - O preço unitário é sempre o preço oficial do cadastro do produto.
+  - Venda e baixa de estoque são executadas dentro de uma **transação** (rollback em caso de erro).
+
+## 🔌 Endpoints
+
+Todos os endpoints (exceto o login) exigem o header `Authorization: Bearer {token}`.
+
+**Paginação:** as listagens de produtos, vendas e movimentações aceitam `?pagina=1&tamanhoPagina=20` (máximo 100) e retornam `{ itens, pagina, tamanhoPagina, total, totalPaginas }`.
+
+**Erros:** respondem em `ProblemDetails` com `400` (regra de negócio), `401`, `404`, `409` (conflito/duplicidade) ou `429` (excesso de tentativas de login).
+
+### Auth — `/api/Auth`
+
+| Método | Rota | Descrição |
+|---|---|---|
+| POST | `/Login` | Autentica e retorna o token (público) |
+| PUT | `/AlterarSenha` | Altera a senha do próprio usuário autenticado |
+
+### Categoria — `/api/Categoria`
+
+| Método | Rota | Descrição |
+|---|---|---|
+| GET | `/` | Lista categorias |
+| GET | `/{id}` | Busca por ID |
+| POST | `/` | Cria categoria |
+| PUT | `/{id}` | Atualiza categoria |
+| DELETE | `/{id}` | Exclui categoria |
+
+### Fornecedor — `/api/Fornecedor`
+
+| Método | Rota | Descrição |
+|---|---|---|
+| GET | `/` | Lista fornecedores |
+| GET | `/{id}` | Busca por ID |
+| POST | `/` | Cria fornecedor |
+| PUT | `/{id}` | Atualiza fornecedor |
+| DELETE | `/{id}` | Exclui fornecedor |
+
+### Produtos — `/api/Produtos`
+
+| Método | Rota | Descrição |
+|---|---|---|
+| GET | `/?incluirInativos=false` | Lista produtos (paginada; por padrão só ativos) |
+| GET | `/{id}` | Busca por ID |
+| POST | `/` | Cria produto |
+| PUT | `/{id}` | Atualiza produto |
+| DELETE | `/{id}` | Desativa o produto (exclusão lógica) |
+
+### Movimentação de estoque — `/api/MovimentacaoEstoque`
+
+| Método | Rota | Descrição |
+|---|---|---|
+| GET | `/` | Lista movimentações |
+| GET | `/{id}` | Busca por ID |
+| GET | `/movimentacao/produto/{produtoId}` | Histórico de um produto |
+| GET | `/movimentacao/periodo?dataInicio=&dataFim=` | Movimentações em um período |
+| POST | `/entrada` | Registra entrada de estoque |
+| POST | `/saida` | Registra saída de estoque |
+
+### Venda — `/api/Venda`
+
+| Método | Rota | Perfis | Descrição |
+|---|---|---|---|
+| GET | `/` | Gerente | Lista vendas |
+| GET | `/{id}` | Gerente | Busca venda por ID |
+| POST | `/` | Caixa, Gerente | Registra uma venda |
+
+### Usuário — `/api/Usuario` (Gerente)
+
+| Método | Rota | Descrição |
+|---|---|---|
+| GET | `/` | Lista usuários |
+| GET | `/{id}` | Busca por ID |
+| POST | `/` | Cria usuário |
+| PUT | `/{id}` | Atualiza usuário |
+| DELETE | `/{id}` | Desativa usuário |
+
+### Perfil — `/api/Perfil` (Gerente)
+
+Lista os perfis cadastrados.
+
+### Exemplo: registrar uma venda
+
+A data é gerada pelo servidor e o usuário é o autenticado no token.
+
+```http
+POST /api/Venda
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "formaPagamento": 4,
+  "itensVenda": [
+    { "produtoId": 1, "quantidade": 2 },
+    { "produtoId": 3, "quantidade": 1 }
+  ]
+}
+```
 
 ## 🚀 Como executar
 
 ### Pré-requisitos
 
-- [.NET SDK 9](https://dotnet.microsoft.com/download)
-- SQL Server (local, Docker ou Azure SQL)
-- (Opcional) [EF Core CLI](https://learn.microsoft.com/ef/core/cli/dotnet): `dotnet tool install --global dotnet-ef`
+- [.NET SDK](https://dotnet.microsoft.com/download) compatível com o `.csproj`
+- SQL Server (local, Docker ou Azure)
 
-### 1. Clonar o repositório
-
-```bash
-git clone https://github.com/<seu-usuario>/<seu-repositorio>.git
-cd <seu-repositorio>
-```
-
-### 2. Configurar as variáveis
-
-O `appsettings.json` vem com a connection string e a chave JWT **vazias** de propósito. Nunca versione segredos. Em desenvolvimento, use o **User Secrets**:
+### Passo a passo
 
 ```bash
+# 1. Clone o repositório
+git clone https://github.com/SEU_USUARIO/SEU_REPOSITORIO.git
+cd SEU_REPOSITORIO
+
+# 2. Configure os segredos (veja a seção Configuração)
 dotnet user-secrets init
+dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Server=localhost;Database=ControleEstoque;User Id=sa;Password=SUA_SENHA;TrustServerCertificate=True"
+dotnet user-secrets set "Jwt:Key" "uma-chave-secreta-com-pelo-menos-32-caracteres"
 
-dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Server=localhost;Database=ControleEstoque;User Id=sa;Password=SuaSenhaForte;TrustServerCertificate=True"
-
-dotnet user-secrets set "Jwt:Key" "uma-chave-secreta-com-no-minimo-32-caracteres"
-
-# Opcional: senha do Gerente inicial
-dotnet user-secrets set "SeedGerente:SenhaInicial" "UmaSenhaForte123!"
-```
-
-Em produção, use variáveis de ambiente (o `__` substitui o `:`):
-
-```
-ConnectionStrings__DefaultConnection
-Jwt__Key
-Jwt__Issuer
-Jwt__Audience
-SeedGerente__SenhaInicial
-```
-
-| Configuração | Obrigatória | Descrição |
-|---|---|---|
-| `ConnectionStrings:DefaultConnection` | ✅ | Connection string do SQL Server |
-| `Jwt:Key` | ✅ | Chave de assinatura do token (mínimo de **32 caracteres**; a aplicação não inicia sem ela) |
-| `Jwt:Issuer` | — | Padrão: `ControleDeEstoqueAPI` |
-| `Jwt:Audience` | — | Padrão: `ControleDeEstoqueAPI` |
-| `SeedGerente:SenhaInicial` | — | Senha do Gerente inicial. **Se não informada, usa uma senha padrão temporária** |
-
-### 3. Rodar a aplicação
-
-```bash
+# 3. Execute (em Development as migrations são aplicadas automaticamente na inicialização)
 dotnet run
 ```
 
-Ao iniciar, a aplicação aplica as migrations automaticamente (`Database.Migrate()`), então não é necessário rodar `dotnet ef database update`.
+Em ambiente de desenvolvimento, o Swagger fica disponível em `/swagger`. Para autenticar, faça login em `POST /api/Auth/Login`, copie o token e informe-o no botão **Authorize** (apenas o token, sem a palavra `Bearer`).
 
-Com `ASPNETCORE_ENVIRONMENT=Development`, o Swagger fica disponível em `https://localhost:<porta>/swagger`.
+### Usuário inicial
 
-### 🔑 Usuário inicial
-
-Se o banco não tiver nenhum usuário, é criado um Gerente:
+Na primeira execução, se não houver nenhum usuário no banco, é criado automaticamente um Gerente:
 
 | Campo | Valor |
 |---|---|
 | Login | `admin` |
 | E-mail | `admin@loja.com` |
-| Senha | valor de `SeedGerente:SenhaInicial` (ou a senha padrão temporária, caso não configurada) |
-| Perfil | Gerente |
+| Senha | valor de `SeedGerente:SenhaInicial` (ou uma senha aleatória exibida no console na primeira execução) |
 
-> ⚠️ **Segurança:** sempre defina `SeedGerente:SenhaInicial` antes do primeiro start e troque a senha após o primeiro acesso.
+> ⚠️ **Altere a senha após o primeiro login.**
 
-## 🔐 Autenticação e perfis
+## ⚙️ Configuração
 
-1. Faça login em `POST /api/Auth/Login` e copie o `token` da resposta.
-2. Envie o token nas demais requisições: `Authorization: Bearer <token>`.
-3. No Swagger, clique em **Authorize** e cole apenas o token (sem a palavra `Bearer`).
+| Chave | Descrição | Obrigatória |
+|---|---|:---:|
+| `ConnectionStrings:DefaultConnection` | String de conexão do SQL Server | Sim |
+| `Jwt:Key` | Chave de assinatura do token (mínimo de 32 caracteres) | Sim |
+| `Jwt:Issuer` | Emissor do token (padrão: `ControleDeEstoqueAPI`) | Sim |
+| `Jwt:Audience` | Audiência do token (padrão: `ControleDeEstoqueAPI`) | Sim |
+| `SeedGerente:SenhaInicial` | Senha do Gerente inicial (se ausente, uma senha aleatória é gerada e exibida uma vez no console) | Recomendada |
+| `Database:MigrateOnStartup` | Aplica migrations ao iniciar fora de Development (padrão: `false`) | Não |
 
-| Perfil | Acesso |
-|---|---|
-| **Gerente** | Acesso total |
-| **Estoquista** | Produtos, Categorias e Movimentações de estoque |
-| **Caixa** | Registrar vendas |
+Os valores sensíveis **não devem** ser versionados. Em desenvolvimento use `dotnet user-secrets`; em produção use variáveis de ambiente (por exemplo, `ConnectionStrings__DefaultConnection` e `Jwt__Key`).
 
-## 📡 Endpoints
-
-### Auth — `/api/Auth`
-
-| Método | Rota | Acesso | Descrição |
-|---|---|---|---|
-| POST | `/api/Auth/Login` | Público | Autentica e retorna o token JWT |
-| PUT | `/api/Auth/Login?id={id}` | Autenticado | Altera a senha do usuário |
-
-**Exemplo de login**
-
-```json
-POST /api/Auth/Login
-{
-  "login": "admin",
-  "senha": "sua-senha"
-}
-```
-
-```json
-{
-  "sucesso": true,
-  "token": "eyJhbGciOi...",
-  "usuarioId": 1,
-  "nome": "Administrador",
-  "perfilNome": "Gerente",
-  "mensagem": "Login bem-sucedido"
-}
-```
-
-### Usuários — `/api/Usuario` (Gerente)
-
-| Método | Rota | Descrição |
-|---|---|---|
-| GET | `/api/Usuario` | Lista usuários |
-| GET | `/api/Usuario/{id}` | Busca usuário por ID |
-| POST | `/api/Usuario` | Cria usuário |
-| PUT | `/api/Usuario/{id}` | Atualiza nome, e-mail e perfil |
-| DELETE | `/api/Usuario/{id}` | Desativa o usuário (exclusão lógica) |
-
-```json
-POST /api/Usuario
-{
-  "nome": "Maria Silva",
-  "email": "maria@loja.com",
-  "login": "maria.silva",
-  "senha": "senha123",
-  "perfilId": 1
-}
-```
-
-`perfilId`: `1` = Caixa, `2` = Estoquista, `3` = Gerente.
-
-### Categorias — `/api/Categoria` (Gerente, Estoquista)
-
-| Método | Rota | Descrição |
-|---|---|---|
-| GET | `/api/Categoria` | Lista categorias |
-| GET | `/api/Categoria/{id}` | Busca por ID |
-| POST | `/api/Categoria` | Cria categoria |
-| PUT | `/api/Categoria/{id}` | Atualiza categoria |
-| DELETE | `/api/Categoria/{id}` | Exclui (bloqueado se houver produtos associados) |
-
-```json
-{ "nomeCategoria": "Bebidas" }
-```
-
-### Fornecedores — `/api/Fornecedor` (Gerente)
-
-| Método | Rota | Descrição |
-|---|---|---|
-| GET | `/api/Fornecedor` | Lista fornecedores |
-| GET | `/api/Fornecedor/{id}` | Busca por ID |
-| POST | `/api/Fornecedor` | Cria fornecedor (CNPJ único) |
-| PUT | `/api/Fornecedor/{id}` | Atualiza fornecedor |
-| DELETE | `/api/Fornecedor/{id}` | Exclui (bloqueado se houver produtos associados) |
-
-```json
-{
-  "nome": "Distribuidora Exemplo LTDA",
-  "cnpj": "11.222.333/0001-81",
-  "telefone": "(11) 91234-5678",
-  "email": "contato@exemplo.com",
-  "endereco": "Rua Exemplo, 123 - São Paulo/SP"
-}
-```
-
-### Produtos — `/api/Produtos` (Gerente, Estoquista)
-
-| Método | Rota | Descrição |
-|---|---|---|
-| GET | `/api/Produtos` | Lista produtos |
-| GET | `/api/Produtos/{id}` | Busca por ID |
-| POST | `/api/Produtos` | Cria produto (nasce ativo e com estoque 0) |
-| PUT | `/api/Produtos/{id}` | Atualiza produto |
-| DELETE | `/api/Produtos/{id}` | Exclui produto |
-
-```json
-POST /api/Produtos
-{
-  "nomeProduto": "Refrigerante 2L",
-  "descricaoProduto": "Refrigerante sabor cola 2 litros",
-  "categoriaId": 1,
-  "fornecedorId": 1,
-  "precoProduto": 9.90
-}
-```
-
-> O estoque só é alterado por movimentações de estoque e vendas.
-
-### Movimentações de estoque — `/api/MovimentacaoEstoque` (Gerente, Estoquista)
-
-| Método | Rota | Descrição |
-|---|---|---|
-| GET | `/api/MovimentacaoEstoque` | Lista movimentações |
-| GET | `/api/MovimentacaoEstoque/{id}` | Busca por ID |
-| GET | `/api/MovimentacaoEstoque/movimentação/produto/{produtoId}` | Movimentações de um produto (mais recentes primeiro) |
-| GET | `/api/MovimentacaoEstoque/movimentação/periodo?dataInicio=&dataFim=` | Movimentações em um período |
-| POST | `/api/MovimentacaoEstoque/entrada` | Registra entrada de estoque |
-| POST | `/api/MovimentacaoEstoque/saida` | Registra saída de estoque (itens) |
-
-```json
-POST /api/MovimentacaoEstoque/entrada
-{
-  "produtoId": 1,
-  "usuarioId": 1,
-  "fornecedorId": 1,
-  "quantidade": 50,
-  "tipoMovimentacao": 1,
-  "observacao": "Reposição mensal"
-}
-```
-
-### Vendas — `/api/Venda`
-
-| Método | Rota | Acesso | Descrição |
-|---|---|---|---|
-| GET | `/api/Venda` | Gerente | Lista vendas |
-| GET | `/api/Venda/{id}` | Gerente | Busca venda por ID |
-| POST | `/api/Venda` | Caixa, Gerente | Registra uma venda |
-
-```json
-POST /api/Venda
-{
-  "dataVenda": "2026-01-15T10:30:00",
-  "usuarioId": 1,
-  "formaPagamento": 4,
-  "itensVenda": [
-    { "produtoId": 1, "quantidade": 2, "precoUnitario": 9.90 }
-  ]
-}
-```
-
-O total da venda é calculado pelo servidor usando o **preço cadastrado do produto**, e o estoque é baixado automaticamente via movimentação de saída.
-
-### Perfis — `/api/Perfil` (Gerente)
-
-Endpoint de listagem de perfis (em ajuste, veja a seção de melhorias).
-
-## ✅ Validações
-
-- **CNPJ:** 14 dígitos, rejeita sequências repetidas e confere os dois dígitos verificadores. Aceita com ou sem máscara.
-- **Telefone:** 10 ou 11 dígitos com DDD válido; celulares (11 dígitos) devem começar com 9.
-- **Login:** apenas letras, números, ponto e underline (`.` e `_`).
-- **Senha (criação de usuário):** mínimo de 6 caracteres.
-- **E-mail e login de usuário:** únicos no banco.
-
-## 🧱 Migrations
-
-As migrations são aplicadas automaticamente ao iniciar. Para gerenciá-las manualmente:
+### Migrations manuais
 
 ```bash
-# Criar nova migration
 dotnet ef migrations add NomeDaMigration
-
-# Aplicar no banco
 dotnet ef database update
 ```
 
-O projeto possui uma `IDesignTimeDbContextFactory`, que lê a connection string de `appsettings.json`, User Secrets ou variáveis de ambiente.
+## 🧭 Melhorias planejadas
 
-## 🛣️ Melhorias planejadas
-
-- Camada de Models e DTOs: revisar validações dos DTOs de atualização (produto, usuário, categoria)
-- Padronizar tratamento de erros com middleware global (hoje alguns serviços lançam `Exception` genérica)
-- Envolver a criação de venda e a baixa de estoque em uma **transação**
-- Obter o `id` do usuário a partir do token na troca de senha
-- Revisar comportamento de exclusão em cascata para preservar o histórico de vendas
-- Testes automatizados (unitários e de integração)
-- Paginação nas listagens
+- Testes automatizados (fluxos de venda e movimentação de estoque)
+- Normalização do CNPJ (com/sem máscara)
+- Conferir, na saída vinculada a uma venda, se os produtos batem com os itens da venda
+- Endpoint de ajuste de estoque (`TipoMovimentacao.Ajuste`)
+- Refresh token e logout
 
 ## 📄 Licença
 
-Defina aqui a licença do projeto (ex.: MIT).
-
-## 👤 Autor
-
-Desenvolvido por ** Gilmar De Azevedo Prado** — [GitHub](https://github.com/Gilmar381)
+Defina aqui a licença do projeto (por exemplo, MIT).

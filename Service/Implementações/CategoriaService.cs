@@ -1,9 +1,9 @@
-﻿using Controle_De_estoqueAPI.Dtos.Categoria;
-using Controle_De_estoqueAPI.Data;
-using Microsoft.EntityFrameworkCore;
-using Controle_De_estoqueAPI.Service.Interfaces;
-using System.Collections.ObjectModel;
+﻿using Controle_De_estoqueAPI.Data;
+using Controle_De_estoqueAPI.Dtos.Categoria;
+using Controle_De_estoqueAPI.Exceptions;
 using Controle_De_estoqueAPI.Models;
+using Controle_De_estoqueAPI.Service.Interfaces;
+using Microsoft.EntityFrameworkCore;
 
 namespace Controle_De_estoqueAPI.Service.Implementações
 {
@@ -14,90 +14,68 @@ namespace Controle_De_estoqueAPI.Service.Implementações
         public CategoriaService(ControleEstoqueDbContexto context)
         {
             _context = context;
-           
         }
+
+        private static CategoriaRespostaDto Mapear(Categoria c) => new()
+        {
+            CategoriaID = c.CategoriaID,
+            NomeCategoria = c.NomeCategoria
+        };
 
         public async Task<CategoriaRespostaDto> CriarAsync(CriarCategoriaDto dto)
         {
-            var categoriaExistente = await _context.Categorias.FirstOrDefaultAsync(c => c.NomeCategoria == dto.NomeCategoria);
-            if (categoriaExistente != null)
-            {
-                throw new Exception("Categoria já existe.");
-            }
+            if (await _context.Categorias.AnyAsync(c => c.NomeCategoria == dto.NomeCategoria))
+                throw new ConflitoException("Categoria já existe.");
 
-            var categoria = new Categoria
-            {
-                NomeCategoria = dto.NomeCategoria
-               
-            };
+            var categoria = new Categoria { NomeCategoria = dto.NomeCategoria };
             _context.Categorias.Add(categoria);
             await _context.SaveChangesAsync();
-            return new CategoriaRespostaDto
-            {
-                CategoriaID = categoria.CategoriaID,
-                NomeCategoria = categoria.NomeCategoria,
-              
-            };
+
+            return Mapear(categoria);
         }
 
         public async Task<CategoriaRespostaDto> ObterPorIdAsync(int id)
         {
-            var categoria = await _context.Categorias.FindAsync(id);
-            if (categoria == null)
-            {
-                throw new Exception("Categoria não encontrada.");
-            }
-            return new CategoriaRespostaDto
-            {
-                CategoriaID = categoria.CategoriaID,
-                NomeCategoria = categoria.NomeCategoria,
-              
-            };
+            var categoria = await _context.Categorias.FindAsync(id)
+                ?? throw new KeyNotFoundException("Categoria não encontrada.");
+            return Mapear(categoria);
         }
 
         public async Task<IEnumerable<CategoriaRespostaDto>> ListarAsync()
         {
-            var categorias = await _context.Categorias
+            return await _context.Categorias
+                .AsNoTracking()
+                .OrderBy(c => c.NomeCategoria)
                 .Select(c => new CategoriaRespostaDto
                 {
                     CategoriaID = c.CategoriaID,
-                    NomeCategoria = c.NomeCategoria,
-                  
+                    NomeCategoria = c.NomeCategoria
                 })
                 .ToListAsync();
-            return categorias;           
         }
 
         public async Task<CategoriaRespostaDto> AtualizarAsync(int id, AtualizarCategoriaDto dto)
         {
-            var categoria = await _context.Categorias.FindAsync(id);
-            if (categoria == null)
-            {
-                throw new Exception("Categoria não encontrada.");
-            }
+            var categoria = await _context.Categorias.FindAsync(id)
+                ?? throw new KeyNotFoundException("Categoria não encontrada.");
+
+            if (await _context.Categorias.AnyAsync(c => c.NomeCategoria == dto.NomeCategoria && c.CategoriaID != id))
+                throw new ConflitoException("Já existe uma categoria com este nome.");
+
             categoria.NomeCategoria = dto.NomeCategoria;
-           
             await _context.SaveChangesAsync();
-            return new CategoriaRespostaDto
-            {
-                CategoriaID = categoria.CategoriaID,
-                NomeCategoria = categoria.NomeCategoria,
-              
-            };
+
+            return Mapear(categoria);
         }
 
         public async Task ExcluirAsync(int id)
         {
-            bool temProduto = await _context.Produtos.AnyAsync(p => p.CategoriaId == id);
-            if (temProduto)
-            {
-                throw new InvalidOperationException("Não é possível excluir a categoria, pois existem produtos associados a ele.");
-            }
-            var categoria = await _context.Categorias.FindAsync(id);
-            if (categoria == null)
-            {
-                throw new Exception("Categoria não encontrada.");
-            }
+            var categoria = await _context.Categorias.FindAsync(id)
+                ?? throw new KeyNotFoundException("Categoria não encontrada.");
+
+            if (await _context.Produtos.AnyAsync(p => p.CategoriaId == id))
+                throw new ConflitoException("Não é possível excluir a categoria, pois existem produtos associados a ela.");
+
             _context.Categorias.Remove(categoria);
             await _context.SaveChangesAsync();
         }

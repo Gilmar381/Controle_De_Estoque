@@ -1,154 +1,151 @@
 ﻿using Controle_De_estoqueAPI.Data;
 using Controle_De_estoqueAPI.Dtos.Usuario;
+using Controle_De_estoqueAPI.Exceptions;
 using Controle_De_estoqueAPI.Models;
-using Microsoft.EntityFrameworkCore;
 using Controle_De_estoqueAPI.Service.Interfaces;
-
-
+using Microsoft.EntityFrameworkCore;
 
 namespace Controle_De_estoqueAPI.Service.Implementações
 {
     public class UsuarioService : IUsuarioService
     {
         private readonly ControleEstoqueDbContexto _context;
-
         private readonly IGerarHashService _gerarHash;
         private readonly IPerfilService _perfil;
 
-        public UsuarioService(ControleEstoqueDbContexto context, 
+        public UsuarioService(ControleEstoqueDbContexto context,
             IGerarHashService gerarHash,
             IPerfilService perfilService)
         {
             _context = context;
             _gerarHash = gerarHash;
             _perfil = perfilService;
-
         }
 
+        private static UsuarioRespostaDto Mapear(Usuario u) => new()
+        {
+            Id = u.Id,
+            Nome = u.NomeUsuario,
+            Email = u.EmailUsuario,
+            Login = u.Login,
+            PerfilId = u.PerfilId,
+            Ativo = u.Ativo
+        };
 
-        // Métodos públicos da interface
         public async Task<UsuarioRespostaDto> CriarAsync(CriarUsuarioDto dto)
         {
-            if (string.IsNullOrEmpty(dto.Email))
-                throw new ArgumentException("Email não pode ser vazio");
+            if (await _perfil.ObterPorIdAsync(dto.PerfilId) == null)
+                throw new RegraDeNegocioException("Perfil inválido.");
 
-            var periflExiste = await _perfil.ObterPorIdAsync(dto.PerfilId);
+            if (await _context.Usuarios.AnyAsync(u => u.EmailUsuario == dto.Email))
+                throw new ConflitoException("Já existe um usuário com este e-mail.");
 
-            if (periflExiste == null) 
-            {
-                throw new InvalidOperationException("Perfil Invalido.");
-            }
+            if (await _context.Usuarios.AnyAsync(u => u.Login == dto.Login))
+                throw new ConflitoException("Já existe um usuário com este login.");
 
-            var existente = await _context.Usuarios.FirstOrDefaultAsync(u => u.EmailUsuario == dto.Email);
-
-            if (existente != null)
-            {        // Pode lançar uma exceção customizada ou retornar null
-                throw new InvalidOperationException("Já existe um usuário com este e-mail.");
-            }
-          
-            var usuario = 
-            new Usuario
+            var usuario = new Usuario
             {
                 NomeUsuario = dto.Nome,
                 EmailUsuario = dto.Email,
                 Login = dto.Login,
-                SenhaHash = _gerarHash.GerarHash(dto.Senha), // Hash da senha com fator de trabalho 12
+                SenhaHash = _gerarHash.GerarHash(dto.Senha), // BCrypt, fator de trabalho 10
                 PerfilId = dto.PerfilId,
                 Ativo = dto.Ativo,
+                DataCriacao = DateTime.UtcNow
             };
 
             _context.Usuarios.Add(usuario);
             await _context.SaveChangesAsync();
 
-            return new UsuarioRespostaDto 
-            { Id = usuario.Id,
-                Nome = usuario.NomeUsuario,
-                Email = usuario.EmailUsuario,
-                Login = dto.Login,
-                PerfilId = dto.PerfilId,
-                Ativo = usuario.Ativo
-            };
+            return Mapear(usuario);
         }
 
         public async Task<IEnumerable<UsuarioRespostaBuscaDto>> ListarAsync()
         {
-            var usuarios = await _context.Usuarios.Select(u => new UsuarioRespostaBuscaDto
-            {
-                Id = u.Id,
-                Nome = u.NomeUsuario,
-                Email = u.EmailUsuario,
-                PerfilId = u.PerfilId,
-                UltimoLogin = u.UltimoLogin,
-                Login = u.Login,
-                Ativo = u.Ativo,
-                DataCriacao = u.DataCriacao
-            })
-
-              .ToListAsync();
-            return usuarios;
-        }
-
-        public async Task<UsuarioRespostaDto> AtualizarAsync(int id, AtualizarUsuarioDto dto)
-        {
-            var usuario = await _context.Usuarios.FindAsync(id)
-            ?? throw new KeyNotFoundException($"Usuário {id} não encontrado.");
-
-
-            usuario.NomeUsuario = dto.Nome;
-            usuario.EmailUsuario = dto.Email;
-            usuario.PerfilId = dto.PerfilId;
-            usuario.Ativo = dto.Ativo;
-
-
-            await _context.SaveChangesAsync();
-
-            return new UsuarioRespostaDto
-            { Nome = usuario.NomeUsuario,
-                Email = usuario.EmailUsuario,
-                PerfilId = usuario.PerfilId,
-                Login = usuario.Login,
-                Ativo = usuario.Ativo
-            };
+            return await _context.Usuarios
+                .AsNoTracking()
+                .OrderBy(u => u.NomeUsuario)
+                .Select(u => new UsuarioRespostaBuscaDto
+                {
+                    Id = u.Id,
+                    Nome = u.NomeUsuario,
+                    Email = u.EmailUsuario,
+                    Login = u.Login,
+                    PerfilId = u.PerfilId,
+                    PerfilNome = u.Perfil.PerfilNome,
+                    Ativo = u.Ativo,
+                    DataCriacao = u.DataCriacao,
+                    UltimoLogin = u.UltimoLogin
+                })
+                .ToListAsync();
         }
 
         public async Task<UsuarioRespostaBuscaDto> ObterPorIdAsync(int id)
         {
             if (id <= 0)
-            {
                 throw new ArgumentException("Id inválido");
+
+            return await _context.Usuarios
+                .AsNoTracking()
+                .Where(u => u.Id == id)
+                .Select(u => new UsuarioRespostaBuscaDto
+                {
+                    Id = u.Id,
+                    Nome = u.NomeUsuario,
+                    Email = u.EmailUsuario,
+                    Login = u.Login,
+                    PerfilId = u.PerfilId,
+                    PerfilNome = u.Perfil.PerfilNome,
+                    Ativo = u.Ativo,
+                    DataCriacao = u.DataCriacao,
+                    UltimoLogin = u.UltimoLogin
+                })
+                .FirstOrDefaultAsync()
+                ?? throw new KeyNotFoundException($"Usuário {id} não encontrado.");
+        }
+
+        public async Task<UsuarioRespostaDto> AtualizarAsync(int id, AtualizarUsuarioDto dto)
+        {
+            var usuario = await _context.Usuarios.FindAsync(id)
+                ?? throw new KeyNotFoundException($"Usuário {id} não encontrado.");
+
+            if (dto.Nome != null)
+            {
+                if (string.IsNullOrWhiteSpace(dto.Nome))
+                    throw new RegraDeNegocioException("O nome não pode ser vazio.");
+                usuario.NomeUsuario = dto.Nome;
             }
 
-            var usuario = await _context.Usuarios.FindAsync(id);
-
-            if (usuario == null)
+            if (dto.Email != null && dto.Email != usuario.EmailUsuario)
             {
-                throw new KeyNotFoundException($"Usuário {id} não encontrado.");
+                if (await _context.Usuarios.AnyAsync(u => u.EmailUsuario == dto.Email && u.Id != id))
+                    throw new ConflitoException("Já existe um usuário com este e-mail.");
+                usuario.EmailUsuario = dto.Email;
             }
 
-            return new UsuarioRespostaBuscaDto
+            if (dto.PerfilId.HasValue)
             {
-                Id = usuario.Id,
-                Nome = usuario.NomeUsuario,
-                Email = usuario.EmailUsuario,
-                PerfilId = usuario.PerfilId,
-                UltimoLogin = usuario.UltimoLogin,
-                DataCriacao = usuario.DataCriacao,
-                Ativo = usuario.Ativo,
-                Login = usuario.Login,
-                
-            };
+                if (await _perfil.ObterPorIdAsync(dto.PerfilId.Value) == null)
+                    throw new RegraDeNegocioException("Perfil inválido.");
+                usuario.PerfilId = dto.PerfilId.Value;
+            }
+
+            if (dto.Ativo.HasValue)
+                usuario.Ativo = dto.Ativo.Value;
+
+            await _context.SaveChangesAsync();
+            return Mapear(usuario);
         }
 
         public async Task<ExclusaoRespostaDto> ExcluirAsync(int id)
         {
-            var usuario = await _context.Usuarios.FindAsync(id);
-            if (usuario == null)
-            {
-                return new ExclusaoRespostaDto{Sucesso = false, Mensagem = "Usuario não encontrado"};
-            }
-            usuario.Ativo = false; // Marca como inativo em vez de excluir fisicamente
+            var usuario = await _context.Usuarios.FindAsync(id)
+                ?? throw new KeyNotFoundException("Usuário não encontrado.");
+
+            usuario.Ativo = false; // exclusão lógica
             await _context.SaveChangesAsync();
-            return new ExclusaoRespostaDto{Sucesso = true, Mensagem = "Usuario excluído com sucesso"};
+
+            return new ExclusaoRespostaDto { Sucesso = true, Mensagem = "Usuário desativado com sucesso" };
         }
     }
 }

@@ -1,10 +1,10 @@
 ﻿using Controle_De_estoqueAPI.Constantes;
+using Controle_De_estoqueAPI.Dtos.Comum;
 using Controle_De_estoqueAPI.Dtos.MovimentacaoEstoque;
-using Controle_De_estoqueAPI.Models;
+using Controle_De_estoqueAPI.Extensions;
 using Controle_De_estoqueAPI.Service.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using System.Security.Claims;
 
 namespace Controle_De_estoqueAPI.Controllers
 {
@@ -21,45 +21,48 @@ namespace Controle_De_estoqueAPI.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> BuscarTodasMovimentacoes()
+        public async Task<IActionResult> BuscarTodasMovimentacoes([FromQuery] PaginacaoParametros paginacao)
         {
-            var resposta = await _movimentacaoService.ListarAsync();
+            var resposta = await _movimentacaoService.ListarAsync(paginacao);
             return Ok(resposta);
         }
 
-        [HttpGet("{Id}")]
-        public async Task<IActionResult> BuscarPorId(int Id)
+        [HttpGet("{id:int}")]
+        public async Task<IActionResult> BuscarPorId(int id)
         {
-            var resposta = await _movimentacaoService.ObterPorIdAsync(Id);
+            var resposta = await _movimentacaoService.ObterPorIdAsync(id);
             return Ok(resposta);
         }
 
-        [HttpGet("movimentacao/produto/{ProdutoId}")]
-        public async Task<IActionResult> BuscarPorProduto(int ProdutoId)
+        [HttpGet("movimentacao/produto/{produtoId:int}")]
+        public async Task<IActionResult> BuscarPorProduto(int produtoId, [FromQuery] PaginacaoParametros paginacao)
         {
-            var resposta = await _movimentacaoService.ListarPorProdutoAsync(ProdutoId);
+            var resposta = await _movimentacaoService.ListarPorProdutoAsync(produtoId, paginacao);
             return Ok(resposta);
         }
 
         [HttpGet("movimentacao/periodo")]
-        public async Task<IActionResult> BuscarPorPeriodo(DateTime dataInicio, DateTime dataFim)
+        public async Task<IActionResult> BuscarPorPeriodo(
+            [FromQuery] DateTime dataInicio,
+            [FromQuery] DateTime dataFim,
+            [FromQuery] PaginacaoParametros paginacao)
         {
-            var resposta = await _movimentacaoService.ListarPorPeriodoAsync(dataInicio, dataFim);
+            var resposta = await _movimentacaoService.ListarPorPeriodoAsync(dataInicio, dataFim, paginacao);
             return Ok(resposta);
         }
 
         [HttpPost("entrada")]
         public async Task<IActionResult> RegistrarEntrada([FromBody] CriarMovimentacaoDto dto)
         {
-            var resposta = await _movimentacaoService.RegistrarEntradaAsync(dto);
+            var resposta = await _movimentacaoService.RegistrarEntradaAsync(dto, User.ObterUsuarioId());
             return Ok(resposta);
         }
+
         [HttpPost("saida")]
         public async Task<IActionResult> RegistrarSaida([FromBody] RegistrarSaidaDto dto)
         {
-            var usuarioId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-            var resposta = await _movimentacaoService.RegistrarSaidaAsync( dto, usuarioId);
-                return Ok(resposta);
+            var resposta = await _movimentacaoService.RegistrarSaidaAsync(dto, User.ObterUsuarioId());
+            return Ok(resposta);
         }
     }
 }

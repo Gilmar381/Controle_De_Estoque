@@ -138,11 +138,18 @@ namespace Controle_De_estoqueAPI.Migrations
                     b.Property<int>("UsuarioId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("VendaId")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("DataMovimentacao");
 
                     b.HasIndex("ProdutoId");
 
                     b.HasIndex("UsuarioId");
+
+                    b.HasIndex("VendaId");
 
                     b.ToTable("MovimentacaoEstoques");
                 });
@@ -217,6 +224,12 @@ namespace Controle_De_estoqueAPI.Migrations
 
                     b.Property<int>("QuantidadeEstoque")
                         .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
 
                     b.Property<DateTime>("UltimaAtualizacao")
                         .HasColumnType("datetime2");
@@ -313,7 +326,7 @@ namespace Controle_De_estoqueAPI.Migrations
                     b.HasOne("Controle_De_estoqueAPI.Models.Produto", "Produto")
                         .WithMany()
                         .HasForeignKey("ProdutoId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("Controle_De_estoqueAPI.Models.Venda", "Venda")
@@ -332,18 +345,25 @@ namespace Controle_De_estoqueAPI.Migrations
                     b.HasOne("Controle_De_estoqueAPI.Models.Produto", "Produto")
                         .WithMany()
                         .HasForeignKey("ProdutoId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("Controle_De_estoqueAPI.Models.Usuario", "Usuario")
                         .WithMany()
                         .HasForeignKey("UsuarioId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("Controle_De_estoqueAPI.Models.Venda", "Venda")
+                        .WithMany()
+                        .HasForeignKey("VendaId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Produto");
 
                     b.Navigation("Usuario");
+
+                    b.Navigation("Venda");
                 });
 
             modelBuilder.Entity("Controle_De_estoqueAPI.Models.Produto", b =>
@@ -351,13 +371,13 @@ namespace Controle_De_estoqueAPI.Migrations
                     b.HasOne("Controle_De_estoqueAPI.Models.Categoria", "Categoria")
                         .WithMany("Produtos")
                         .HasForeignKey("CategoriaId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("Controle_De_estoqueAPI.Models.Fornecedor", "Fornecedor")
                         .WithMany("Produtos")
                         .HasForeignKey("FornecedorId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Categoria");
@@ -370,7 +390,7 @@ namespace Controle_De_estoqueAPI.Migrations
                     b.HasOne("Controle_De_estoqueAPI.Models.Perfil", "Perfil")
                         .WithMany("Usuarios")
                         .HasForeignKey("PerfilId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Perfil");
@@ -381,7 +401,7 @@ namespace Controle_De_estoqueAPI.Migrations
                     b.HasOne("Controle_De_estoqueAPI.Models.Usuario", "Usuario")
                         .WithMany()
                         .HasForeignKey("UsuarioId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Usuario");

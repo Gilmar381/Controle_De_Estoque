@@ -1,17 +1,13 @@
 ﻿using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
-using Controle_De_estoqueAPI.Models;
+
 namespace Controle_De_estoqueAPI.Dtos.Venda
 {
     public class ItemVendaDto
     {
-
-      
-        [Required]
+        [Range(1, int.MaxValue)]
         public int ProdutoId { get; set; }
 
-        [Required]
+        [Range(1, int.MaxValue, ErrorMessage = "A quantidade deve ser maior que zero.")]
         public int Quantidade { get; set; }
-
     }
 }

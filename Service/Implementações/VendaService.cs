@@ -1,9 +1,12 @@
 ﻿using Controle_De_estoqueAPI.Data;
+using Controle_De_estoqueAPI.Dtos.Comum;
 using Controle_De_estoqueAPI.Dtos.MovimentacaoEstoque;
 using Controle_De_estoqueAPI.Dtos.Venda;
+using Controle_De_estoqueAPI.Exceptions;
 using Controle_De_estoqueAPI.Models;
 using Controle_De_estoqueAPI.Service.Interfaces;
 using Microsoft.EntityFrameworkCore;
+using System.Linq.Expressions;
 
 namespace Controle_De_estoqueAPI.Service.Implementações
 {
@@ -16,13 +19,33 @@ namespace Controle_De_estoqueAPI.Service.Implementações
         {
             _context = context;
             _movimentacaoService = movimentacao;
-            
         }
+
+        private static readonly Expression<Func<Venda, VendaRespostaDto>> Projecao = v => new VendaRespostaDto
+        {
+            Id = v.Id,
+            DataVenda = v.DataVenda,
+            UsuarioId = v.UsuarioId,
+            TotalVenda = v.TotalVenda,
+            FormaPagamento = v.FormaPagamento,
+            ItensVenda = v.ItensVenda.Select(i => new ItemVendaRespostaDto
+            {
+                Id = i.Id,
+                VendaId = i.VendaId,
+                ProdutoId = i.ProdutoId,
+                Quantidade = i.Quantidade,
+                PrecoUnitario = i.PrecoUnitario,
+                Subtotal = i.Subtotal
+            }).ToList()
+        };
+
+        // Versão compilada da projeção, para mapear entidades já em memória.
+        private static readonly Func<Venda, VendaRespostaDto> ParaDto = Projecao.Compile();
 
         public async Task<VendaRespostaDto> CriarAsync(CriarVendaDto dto, int usuarioId)
         {
-            if (dto.ItensVenda == null || !dto.ItensVenda.Any())
-                throw new Exception("A venda deve conter pelo menos um item.");
+            if (dto.ItensVenda == null || dto.ItensVenda.Count == 0)
+                throw new RegraDeNegocioException("A venda deve conter pelo menos um item.");
 
             // Agrupa itens repetidos do mesmo produto
             var itensAgrupados = dto.ItensVenda
@@ -36,21 +59,22 @@ namespace Controle_De_estoqueAPI.Service.Implementações
                 .Where(p => produtosIds.Contains(p.Id))
                 .ToDictionaryAsync(p => p.Id);
 
-            if (produtos.Count != produtosIds.Count)
-                throw new Exception("Um ou mais produtos não existem.");
+            var faltando = produtosIds.Where(id => !produtos.ContainsKey(id)).ToList();
+            if (faltando.Count > 0)
+                throw new KeyNotFoundException($"Produto(s) não encontrado(s): {string.Join(", ", faltando)}.");
 
             foreach (var item in itensAgrupados)
             {
                 var produto = produtos[item.ProdutoId];
 
                 if (item.Quantidade <= 0)
-                    throw new Exception("A quantidade deve ser maior que zero.");
+                    throw new RegraDeNegocioException("A quantidade deve ser maior que zero.");
 
                 if (!produto.Ativo)
-                    throw new Exception($"O produto '{produto.NomeProduto}' está inativo.");
+                    throw new RegraDeNegocioException($"O produto '{produto.NomeProduto}' está inativo.");
 
                 if (produto.QuantidadeEstoque < item.Quantidade)
-                    throw new Exception($"Estoque insuficiente para '{produto.NomeProduto}'.");
+                    throw new RegraDeNegocioException($"Estoque insuficiente para '{produto.NomeProduto}'.");
             }
 
             await using var transaction = await _context.Database.BeginTransactionAsync();
@@ -60,17 +84,22 @@ namespace Controle_De_estoqueAPI.Service.Implementações
                 var venda = new Venda
                 {
                     DataVenda = DateTime.UtcNow,
-                    UsuarioId = dto.UsuarioId,
+                    UsuarioId = usuarioId, // sempre o usuário autenticado
                     FormaPagamento = dto.FormaPagamento,
-                    ItensVenda = itensAgrupados.Select(i => new ItemVenda
+                    ItensVenda = itensAgrupados.Select(i =>
                     {
-                        ProdutoId = i.ProdutoId,
-                        Quantidade = i.Quantidade,
-                        PrecoUnitario = produtos[i.ProdutoId].PrecoProduto
+                        var preco = produtos[i.ProdutoId].PrecoProduto; // preço oficial do cadastro
+                        return new ItemVenda
+                        {
+                            ProdutoId = i.ProdutoId,
+                            Quantidade = i.Quantidade,
+                            PrecoUnitario = preco,
+                            Subtotal = i.Quantidade * preco
+                        };
                     }).ToList()
                 };
 
-                venda.TotalVenda = venda.ItensVenda.Sum(i => i.Quantidade * i.PrecoUnitario);
+                venda.TotalVenda = venda.ItensVenda.Sum(i => i.Subtotal);
 
                 _context.Vendas.Add(venda);
                 await _context.SaveChangesAsync();
@@ -85,23 +114,11 @@ namespace Controle_De_estoqueAPI.Service.Implementações
                     }).ToList()
                 };
 
-                await _movimentacaoService.RegistrarSaidaAsync(saidaDto, dto.UsuarioId);
+                await _movimentacaoService.RegistrarSaidaAsync(saidaDto, usuarioId);
 
                 await transaction.CommitAsync();
 
-                return new VendaRespostaDto
-                {
-                    Id = venda.Id,
-                    DataVenda = venda.DataVenda,
-                    UsuarioId = venda.UsuarioId,
-                    TotalVenda = venda.TotalVenda,
-                    FormaPagamento = venda.FormaPagamento,
-                    ItensVenda = venda.ItensVenda.Select(i => new ItemVendaDto
-                    {
-                        ProdutoId = i.ProdutoId,
-                        Quantidade = i.Quantidade
-                    }).ToList()
-                };
+                return ParaDto(venda);
             }
             catch
             {
@@ -109,85 +126,24 @@ namespace Controle_De_estoqueAPI.Service.Implementações
                 throw;
             }
         }
+
         public async Task<VendaRespostaDto> ObterPorIdAsync(int id)
         {
-            var venda = await _context.Vendas
-                .Include(v => v.ItensVenda)
-                .FirstOrDefaultAsync(v => v.Id == id);
-            if (venda == null)
-            {
-                throw new Exception("Venda não encontrada.");
-            }
-            return new VendaRespostaDto
-            {
-                Id = venda.Id,
-                DataVenda = venda.DataVenda,
-                UsuarioId = venda.UsuarioId,
-                TotalVenda = venda.TotalVenda,
-                FormaPagamento = venda.FormaPagamento,
-                ItensVenda = venda.ItensVenda.Select(i => new ItemVendaDto
-                {
-                    ProdutoId = i.ProdutoId,
-                    Quantidade = i.Quantidade
-                }).ToList()
-            };
+            return await _context.Vendas
+                .AsNoTracking()
+                .Where(v => v.Id == id)
+                .Select(Projecao)
+                .FirstOrDefaultAsync()
+                ?? throw new KeyNotFoundException("Venda não encontrada.");
         }
 
-        public async Task<IEnumerable<VendaRespostaDto>> ListarAsync()
+        public async Task<PaginadoDto<VendaRespostaDto>> ListarAsync(PaginacaoParametros paginacao)
         {
-            var vendas = await _context.Vendas
-                .Include(v => v.ItensVenda)
-                .ToListAsync();
-            return vendas.Select(v => new VendaRespostaDto
-            {
-                Id = v.Id,
-                DataVenda = v.DataVenda,
-                UsuarioId = v.UsuarioId,
-                TotalVenda = v.TotalVenda,
-                FormaPagamento = v.FormaPagamento,
-                ItensVenda = v.ItensVenda.Select(i => new ItemVendaDto
-                {
-                    ProdutoId = i.ProdutoId,
-                    Quantidade = i.Quantidade
-                }).ToList()
-            });
+            return await _context.Vendas
+                .AsNoTracking()
+                .OrderByDescending(v => v.DataVenda).ThenByDescending(v => v.Id)
+                .Select(Projecao)
+                .ToPaginadoAsync(paginacao);
         }
-
-        public async Task<decimal> CalcularTotalAsync(List<ItemVendaDto> dto)
-        {
-            var produtosIds = dto.Select(i => i.ProdutoId).ToList();
-            var produtos = await _context.Produtos
-                .Where(p => produtosIds.Contains(p.Id))
-                .ToListAsync();
-           if (produtos.Count != dto.Count)
-            {
-                throw new Exception("Um ou mais produtos não existem.");
-            }
-             decimal total = 0;
-            foreach (var item in dto)
-            {
-                var produto = produtos.First(p => p.Id == item.ProdutoId);
-                total += item.Quantidade * produto.PrecoProduto; // usa o preço oficial do estoque
-            }
-
-            return total;
-        }
-
     }
-
-
-   
-
-    
-
-  
-
-   
-   
-       
-       
-   
-    
-   
-} 
-
+}

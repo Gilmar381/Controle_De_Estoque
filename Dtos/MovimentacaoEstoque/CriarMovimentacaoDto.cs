@@ -1,27 +1,18 @@
-﻿using Controle_De_estoqueAPI.Models;
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 
 namespace Controle_De_estoqueAPI.Dtos.MovimentacaoEstoque
 {
+    /// <summary>Entrada de estoque. O usuário responsável vem do token JWT, não do corpo.</summary>
     public class CriarMovimentacaoDto
     {
-        [Required]
+        [Range(1, int.MaxValue)]
         public int ProdutoId { get; set; }
 
-        [Required]          
-        public int UsuarioId { get; set; }
-
-        [Required]
-        public int FornecedorId { get; set; } 
-
-        [Required]
         [Range(1, int.MaxValue, ErrorMessage = "A quantidade deve ser maior que zero.")]
         public int Quantidade { get; set; }
 
- 
-
         [Required]
-        [MaxLength(500)]
-        public  string Observacao { get; set; }
+        [MaxLength(200)]
+        public string Observacao { get; set; }
     }
 }

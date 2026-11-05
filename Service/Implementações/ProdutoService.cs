@@ -1,9 +1,11 @@
 ﻿using Controle_De_estoqueAPI.Data;
+using Controle_De_estoqueAPI.Dtos.Comum;
 using Controle_De_estoqueAPI.Dtos.Produto;
+using Controle_De_estoqueAPI.Exceptions;
 using Controle_De_estoqueAPI.Models;
 using Controle_De_estoqueAPI.Service.Interfaces;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Identity.Client;
+using System.Linq.Expressions;
 
 namespace Controle_De_estoqueAPI.Service.Implementações
 {
@@ -16,178 +18,137 @@ namespace Controle_De_estoqueAPI.Service.Implementações
             _context = context;
         }
 
-        public async Task<ProdutoRespostaDto> CriarAsync(CriarProdutoDto dto) //Criar Produto
+        private static readonly Expression<Func<Produto, ProdutoRespostaDto>> Projecao = p => new ProdutoRespostaDto
         {
-            var fornecedorExistente = await _context.Fornecedores
-               .FindAsync(dto.FornecedorId);
-            if (fornecedorExistente == null)
-            {
+            Id = p.Id,
+            NomeProduto = p.NomeProduto,
+            DescricaoProduto = p.DescricaoProduto,
+            PrecoProduto = p.PrecoProduto,
+            NomeFornecedor = p.Fornecedor.NomeFornecedor,
+            NomeCategoria = p.Categoria.NomeCategoria,
+            QuantidadeEstoque = p.QuantidadeEstoque,
+            Ativo = p.Ativo,
+            DataCadastro = p.DataCadastro,
+            UltimaAtualizacao = p.UltimaAtualizacao
+        };
+
+        public async Task<ProdutoRespostaDto> CriarAsync(CriarProdutoDto dto)
+        {
+            if (!await _context.Fornecedores.AnyAsync(f => f.Id == dto.FornecedorId))
                 throw new KeyNotFoundException($"Fornecedor com ID {dto.FornecedorId} não encontrado.");
-            }
 
-            var categoriaExistente = await _context.Categorias
-                .FindAsync(dto.CategoriaId);
-            if (categoriaExistente == null)
-            {
+            if (!await _context.Categorias.AnyAsync(c => c.CategoriaID == dto.CategoriaId))
                 throw new KeyNotFoundException($"Categoria com ID {dto.CategoriaId} não encontrada.");
-            }
 
-                var produtoExistente = await _context.Produtos
-                .Include(f => f.Fornecedor)
-                .Include(c => c.Categoria)
-                .FirstOrDefaultAsync(p => p.NomeProduto == dto.NomeProduto);
+            if (await _context.Produtos.AnyAsync(p => p.NomeProduto == dto.NomeProduto))
+                throw new ConflitoException("Já existe um produto com este nome.");
 
-            if (produtoExistente != null)
-            {
-                throw new InvalidOperationException("Já existe um produto com este nome.");
-            }
-
-            var novoProduto = new Produto
+            var agora = DateTime.UtcNow;
+            var produto = new Produto
             {
                 NomeProduto = dto.NomeProduto,
                 DescricaoProduto = dto.DescricaoProduto,
                 CategoriaId = dto.CategoriaId,
                 FornecedorId = dto.FornecedorId,
                 PrecoProduto = dto.PrecoProduto,
-                QuantidadeEstoque = 0, // Inicializa a quantidade em estoque como 0
-                Ativo = true, // Inicializa o produto como ativo
-                DataCadastro = DateTime.UtcNow,
-                UltimaAtualizacao = DateTime.UtcNow
+                QuantidadeEstoque = 0, // o estoque só muda por movimentações
+                Ativo = true,
+                DataCadastro = agora,
+                UltimaAtualizacao = agora
             };
 
-            _context.Produtos.Add(novoProduto);
+            _context.Produtos.Add(produto);
             await _context.SaveChangesAsync();
 
-            return new ProdutoRespostaDto
-            {
-                Id = novoProduto.Id,
-                NomeProduto = novoProduto.NomeProduto,
-                DescricaoProduto = novoProduto.DescricaoProduto,
-                PrecoProduto = novoProduto.PrecoProduto,
-                NomeFornecedor = novoProduto.Fornecedor?.NomeFornecedor ??"Fornecedor não encontrado",
-                NomeCategoria = novoProduto.Categoria?.NomeCategoria??"Categoria não encontrada",
-                QuantidadeEstoque = novoProduto.QuantidadeEstoque,
-                Ativo = novoProduto.Ativo,
-                DataCadastro = novoProduto.DataCadastro,
-                UltimaAtualizacao = novoProduto.UltimaAtualizacao
-            };
+            return await ObterPorIdAsync(produto.Id);
         }
 
-
-        public async Task<IEnumerable<ProdutoRespostaDto>> ListarAsync() //Listar Produtos
+        public async Task<PaginadoDto<ProdutoRespostaDto>> ListarAsync(PaginacaoParametros paginacao, bool incluirInativos = false)
         {
-            var produtos = await _context.Produtos
-                .Select(p => new ProdutoRespostaDto
-                {
-                    Id = p.Id,
-                    NomeProduto = p.NomeProduto,
-                    DescricaoProduto = p.DescricaoProduto,
-                    PrecoProduto = p.PrecoProduto,
-                    NomeFornecedor = p.Fornecedor.NomeFornecedor ,
-                    NomeCategoria = p.Categoria.NomeCategoria ,
-                    QuantidadeEstoque = p.QuantidadeEstoque,
-                    Ativo = p.Ativo,
-                    DataCadastro = p.DataCadastro,
-                    UltimaAtualizacao = p.UltimaAtualizacao
-                })
-                .ToListAsync();
-            return produtos;
+            var query = _context.Produtos.AsNoTracking();
+
+            if (!incluirInativos)
+                query = query.Where(p => p.Ativo);
+
+            return await query
+                .OrderBy(p => p.NomeProduto).ThenBy(p => p.Id)
+                .Select(Projecao)
+                .ToPaginadoAsync(paginacao);
         }
 
-        public async Task<ProdutoRespostaDto> ObterPorIdAsync(int id) //Obter Produto por Id
+        public async Task<ProdutoRespostaDto> ObterPorIdAsync(int id)
         {
-            var produto = await _context.Produtos
-                .Include(p => p.Fornecedor)
-                .Include(p => p.Categoria)
+            return await _context.Produtos
                 .AsNoTracking()
-                .FirstOrDefaultAsync(p => p.Id == id);
-            if (produto == null)
-            {
-                throw new KeyNotFoundException($"Produto com ID {id} não encontrado.");
-            }
-            return new ProdutoRespostaDto
-            {
-                Id = produto.Id,
-                NomeProduto = produto.NomeProduto,
-                DescricaoProduto = produto.DescricaoProduto,
-                PrecoProduto = produto.PrecoProduto,
-                NomeFornecedor = produto.Fornecedor.NomeFornecedor,
-                NomeCategoria = produto.Categoria.NomeCategoria,
-                QuantidadeEstoque = produto.QuantidadeEstoque,
-                Ativo = produto.Ativo,
-                DataCadastro = produto.DataCadastro,
-                UltimaAtualizacao = produto.UltimaAtualizacao
-            };
+                .Where(p => p.Id == id)
+                .Select(Projecao)
+                .FirstOrDefaultAsync()
+                ?? throw new KeyNotFoundException($"Produto com ID {id} não encontrado.");
         }
 
-        public async Task<ProdutoRespostaDto> AtualizarAsync(int id, AtualizarProdutoDto dto) //Atualizar Produto
+        public async Task<ProdutoRespostaDto> AtualizarAsync(int id, AtualizarProdutoDto dto)
         {
-            var fornecedorExistente = await _context.Fornecedores
-                .FindAsync(dto.FornecedorId);
-            if (fornecedorExistente == null)
+            var produto = await _context.Produtos.FirstOrDefaultAsync(p => p.Id == id)
+                ?? throw new KeyNotFoundException($"Produto com ID {id} não encontrado.");
+
+            if (dto.NomeProduto != null)
             {
-                throw new KeyNotFoundException($"Fornecedor com ID {dto.FornecedorId} não encontrado.");
+                if (string.IsNullOrWhiteSpace(dto.NomeProduto))
+                    throw new RegraDeNegocioException("O nome do produto não pode ser vazio.");
+
+                if (await _context.Produtos.AnyAsync(p => p.NomeProduto == dto.NomeProduto && p.Id != id))
+                    throw new ConflitoException($"Já existe um produto com o nome '{dto.NomeProduto}'.");
+
+                produto.NomeProduto = dto.NomeProduto;
             }
 
-            var categoriaExistente = await _context.Categorias
-                .FindAsync(dto.CategoriaId);
-            if (categoriaExistente == null)
+            if (dto.DescricaoProduto != null)
+                produto.DescricaoProduto = dto.DescricaoProduto;
+
+            if (dto.CategoriaId.HasValue)
             {
-                throw new KeyNotFoundException($"Categoria com ID {dto.CategoriaId} não encontrada.");
+                if (!await _context.Categorias.AnyAsync(c => c.CategoriaID == dto.CategoriaId.Value))
+                    throw new KeyNotFoundException($"Categoria com ID {dto.CategoriaId} não encontrada.");
+                produto.CategoriaId = dto.CategoriaId.Value;
             }
 
-            var produtoExistente = await _context.Produtos
-                .Include(p => p.Fornecedor)
-                .Include(p => p. Categoria)
-                .FirstOrDefaultAsync(p => p.Id == id);
+            if (dto.FornecedorId.HasValue)
+            {
+                if (!await _context.Fornecedores.AnyAsync(f => f.Id == dto.FornecedorId.Value))
+                    throw new KeyNotFoundException($"Fornecedor com ID {dto.FornecedorId} não encontrado.");
+                produto.FornecedorId = dto.FornecedorId.Value;
+            }
 
-            if (produtoExistente == null)
+            if (dto.PrecoProduto.HasValue)
             {
-                throw new KeyNotFoundException($"Produto com ID {id} não encontrado.");
+                if (dto.PrecoProduto.Value <= 0)
+                    throw new RegraDeNegocioException("O preço do produto deve ser maior que zero.");
+                produto.PrecoProduto = dto.PrecoProduto.Value;
             }
-            var produtoAtuaizado = await _context.Produtos
-                .FirstOrDefaultAsync(p => p.NomeProduto == dto.NomeProduto && p.Id != id);
-            if (produtoAtuaizado != null)
-            {
-                throw new InvalidOperationException($"Já existe um produto com o nome '{dto.NomeProduto}'.");
-            }
-            produtoExistente.NomeProduto = dto.NomeProduto;
-            produtoExistente.DescricaoProduto = dto.DescricaoProduto;
-            produtoExistente.CategoriaId = dto.CategoriaId;
-            produtoExistente.FornecedorId = dto.FornecedorId;
-            produtoExistente.PrecoProduto = (decimal)dto.PrecoProduto;
-            produtoExistente.Ativo = dto.Ativo;
-            produtoExistente.UltimaAtualizacao = DateTime.UtcNow;
+
+            if (dto.Ativo.HasValue)
+                produto.Ativo = dto.Ativo.Value;
+
+            produto.UltimaAtualizacao = DateTime.UtcNow;
             await _context.SaveChangesAsync();
 
-            return new ProdutoRespostaDto
-            {
-                Id = produtoExistente.Id,
-                NomeProduto = produtoExistente.NomeProduto,
-                DescricaoProduto = produtoExistente.DescricaoProduto,
-                PrecoProduto = produtoExistente.PrecoProduto,
-                NomeFornecedor = produtoExistente.Fornecedor.NomeFornecedor,
-                NomeCategoria = produtoExistente.Categoria.NomeCategoria,
-                QuantidadeEstoque = produtoExistente.QuantidadeEstoque,
-                Ativo = produtoExistente.Ativo,
-                DataCadastro = produtoExistente.DataCadastro,
-                UltimaAtualizacao = produtoExistente.UltimaAtualizacao
-            }; 
+            return await ObterPorIdAsync(id);
         }
 
-            public async Task<DeleterRespostaDto> ExcluirAsync(int id) //Deletar Produto
+        public async Task<DeleterRespostaDto> ExcluirAsync(int id)
+        {
+            var produto = await _context.Produtos.FindAsync(id)
+                ?? throw new KeyNotFoundException($"Produto com ID {id} não encontrado.");
+
+            // Exclusão lógica: vendas e movimentações antigas continuam apontando para o produto.
+            produto.Ativo = false;
+            produto.UltimaAtualizacao = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            return new DeleterRespostaDto
             {
-                var produtoExistente = await _context.Produtos.FindAsync(id);
-                if (produtoExistente == null)
-                {
-                    throw new KeyNotFoundException($"Produto com ID {id} não encontrado.");
-                }
-                _context.Produtos.Remove(produtoExistente);
-                await _context.SaveChangesAsync();
-                return new DeleterRespostaDto
-                {
-                    mensagem = $"Produto com ID {id} foi excluído com sucesso."
-                };
+                mensagem = $"Produto com ID {id} foi desativado com sucesso."
+            };
         }
     }
 }

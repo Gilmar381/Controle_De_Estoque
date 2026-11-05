@@ -5,6 +5,7 @@ using Controle_De_estoqueAPI.Service.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
+using Controle_De_estoqueAPI.Dtos.Comum;
 
 
 namespace Controle_De_estoqueAPI.Controllers
@@ -23,9 +24,9 @@ namespace Controle_De_estoqueAPI.Controllers
 
         [HttpGet]
         [Authorize(Roles = PerfilConst.Gerente)]
-        public async Task<IActionResult> BuscarTodos()
+        public async Task<IActionResult> BuscarTodos([FromQuery] PaginacaoParametros paginacao)
         {
-            var resultado = await _vendaService.ListarAsync();
+            var resultado = await _vendaService.ListarAsync(paginacao);
             return Ok(resultado);
         }
 

@@ -11,6 +11,7 @@ namespace Controle_De_estoqueAPI.Models
         [Required]
         [MaxLength(100)]
         public string NomeProduto { get; set; }
+
         [MaxLength(200)]
         public string DescricaoProduto { get; set; }
 
@@ -29,16 +30,17 @@ namespace Controle_De_estoqueAPI.Models
         [Range(0.01, double.MaxValue, ErrorMessage = "O preço do produto deve ser maior que zero.")]
         public decimal PrecoProduto { get; set; }
 
-        
         public int QuantidadeEstoque { get; set; }
-        public bool Ativo { get; set; }= true;
+        public bool Ativo { get; set; } = true;
 
         [DataType(DataType.DateTime)]
         public DateTime DataCadastro { get; set; } = DateTime.UtcNow;
 
         [DataType(DataType.DateTime)]
         public DateTime UltimaAtualizacao { get; set; }
-        
-      
+
+        /// <summary>Controle de concorrência otimista: impede duas operações simultâneas sobrescreverem o estoque.</summary>
+        [Timestamp]
+        public byte[] RowVersion { get; set; } = Array.Empty<byte>();
     }
 }

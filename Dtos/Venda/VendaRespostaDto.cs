@@ -9,6 +9,6 @@ namespace Controle_De_estoqueAPI.Dtos.Venda
         public int UsuarioId { get; set; }
         public decimal TotalVenda { get; set; }
         public FormaPagamento FormaPagamento { get; set; }
-        public ICollection<ItemVendaDto> ItensVenda { get; set; }
+        public ICollection<ItemVendaRespostaDto> ItensVenda { get; set; } = new List<ItemVendaRespostaDto>();
     }
 }

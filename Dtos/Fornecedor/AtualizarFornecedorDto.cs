@@ -5,7 +5,6 @@ namespace Controle_De_estoqueAPI.Dtos.Fornecedor
 {
     public class AtualizarFornecedorDto
     {
-
         [Required]
         [MaxLength(150)]
         public string Nome { get; set; }
@@ -28,6 +27,5 @@ namespace Controle_De_estoqueAPI.Dtos.Fornecedor
         [MaxLength(300)]
         [Required]
         public string Endereco { get; set; }
-        public string DescricaoProduto { get; set; }
     }
 }
