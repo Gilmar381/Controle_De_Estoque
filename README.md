@@ -271,4 +271,6 @@ dotnet ef database update
 
 ## 📄 Licença
 
-Defina aqui a licença do projeto (por exemplo, MIT).
+## 📄 Licença
+
+Distribuído sob a licença MIT. Consulte o arquivo [LICENSE](LICENSE) para mais detalhes.
