@@ -18,7 +18,7 @@ namespace Controle_De_estoqueAPI.Controllers
             _perfilService = perfilService;
         }
 
-        [HttpDelete]
+        [HttpGet]
         public async Task<IActionResult> BuscarTodos()
         {
             var resultado = await _perfilService.ListarAsync();
